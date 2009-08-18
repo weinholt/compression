@@ -74,6 +74,7 @@ Author: Göran Weinholt <goran@weinholt.se>.
                   (display "Extracting ")
                   (display (central-directory-filename rec))
                   (display " ... ")
+                  (flush-output-port (current-output-port))
                   ;; TODO: sanitize the filename, handle directories
                   (cond ((supported-compression-method?
                           (central-directory-compression-method rec))
