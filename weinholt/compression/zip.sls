@@ -347,8 +347,8 @@
      (list->vector
       (map (lambda (c)
              (cond ((< c 144) 8)
-                   ((< c 255) 9)
-                   ((< c 279) 7)
+                   ((< c 256) 9)
+                   ((< c 280) 7)
                    (else 8)))
            (iota 288)))))
 
@@ -438,8 +438,7 @@
              (unless (= len (fxand #xffff (fxnot nlen)))
                (error 'inflate "error in non-compressed block length" len nlen))
              (put-bytevector out (get-bytevector-n in len))))
-          ((#b01)                    ;static Huffman tree (not tested)
-           (print "WARNING: static huffman codes")
+          ((#b01)                       ;static Huffman tree
            (read-compressed-data static-table2 static-table3))
           ((#b10)                       ;dynamic Huffman tree
            (let* ((hlit (+ 257 (get-bits 5)))
