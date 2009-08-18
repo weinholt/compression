@@ -58,35 +58,41 @@ Author: Göran Weinholt <goran@weinholt.se>.
 
 (define (extract-files filename)
   (print "Extracting files from " filename " ...\n")
-  (let* ((p (open-file-input-port filename)))
+  (let ((p (open-file-input-port filename)))
     (let lp ((records (get-central-directory p))
              (status 0))
       (cond ((null? records)
              (exit status))
             ((central-directory? (car records))
-             (let ((rec (car records)))
-               (display "Extracting ")
-               (display (central-directory-filename rec))
-               (display " ... ")
-               ;; TODO: sanitize the filename, handle directories
-               (cond ((supported-compression-method?
-                       (central-directory-compression-method rec))
-                      (let ((crc (extract-file p (central-directory->file-record p rec)
-                                               rec)))
-                        (if (= crc (central-directory-crc-32 rec))
-                            (print "OK!")
-                            (print "CRC error!")) ;XXX: delete the file?
-                        (lp (cdr records)
-                            (and status (= crc (central-directory-crc-32 rec)) 0))))
-                     (else
-                      (print "unimplemented compression method "
-                             (central-directory-compression-method rec) " :(")
-                      (lp (cdr records) #f)))))
+             (let* ((rec (car records))
+                    (type (central-directory-filetype rec)))
+               (case type
+                 ((directory)
+                  (print "Directory " (central-directory-filename rec) " ... not creating it. :(")
+                  (lp (cdr records) #f))
+                 ((file)
+                  (display "Extracting ")
+                  (display (central-directory-filename rec))
+                  (display " ... ")
+                  ;; TODO: sanitize the filename, handle directories
+                  (cond ((supported-compression-method?
+                          (central-directory-compression-method rec))
+                         (let ((crc (extract-file p (central-directory->file-record p rec)
+                                                  rec)))
+                           (if (= crc (central-directory-crc-32 rec))
+                               (print "OK!")
+                               (print "CRC error!")) ;XXX: delete the file?
+                           (lp (cdr records)
+                               (and status (= crc (central-directory-crc-32 rec)) 0))))
+                        (else
+                         (print "unimplemented compression method "
+                                (central-directory-compression-method rec) " :(")
+                         (lp (cdr records) #f))))
+                 (else
+                  (print "Not extracting " (central-directory-filename rec) " (" type ")")
+                  (lp (cdr records) status)))))
             (else
-             (lp (cdr records) status))))))
-
-
-
+             (lp (cdr records) status)))))) ;end of central directory record
 
 (define (char-printable? c)
   (or (char-whitespace? c)
@@ -101,25 +107,23 @@ Author: Göran Weinholt <goran@weinholt.se>.
 
 (define (list-files filename)
   (print "Listing files in " filename " (from the central directory) ...\n")
-  (print "CRC-32    Size          Last modified                  Name\n")
+  (print "CRC-32    Last modified            Size           Name\n")
 
   (let* ((p (open-file-input-port filename))
          (records (get-central-directory p))
          (end (last records)))
     (for-each (lambda (rec)
-                (print
-                 (string-pad (number->string (central-directory-crc-32 rec) 16)
-                             9 #\0)
-                 " "
-                 (pad
-                  (string-append
-                   (number->string (central-directory-uncompressed-size rec))
-                   "/"
-                   (number->string (central-directory-compressed-size rec)))
-                  13 #\space)
-                 " "
-                 (date->string (central-directory-date rec))
-                 "  " (string-filter char-printable? (central-directory-filename rec)))
+                (let ((date (central-directory-date rec)))
+                  (print
+                   (string-pad (number->string (central-directory-crc-32 rec) 16)
+                               9 #\0)
+                   (if date (date->string date " ~1 ~2 ") " ????-??-?? ??:??:??+???? ")
+                   
+                   (pad (string-append (number->string (central-directory-uncompressed-size rec))
+                                       "/"
+                                       (number->string (central-directory-compressed-size rec)))
+                        13 #\space)
+                   "  " (string-filter char-printable? (central-directory-filename rec))))
 
                 (unless (supported-compression-method?
                          (central-directory-compression-method rec))
@@ -139,8 +143,7 @@ Author: Göran Weinholt <goran@weinholt.se>.
                  (central-directory-extra rec))
                 (let ((comment (central-directory-comment rec)))
                   (unless (equal? "" comment)
-                    (print "Comment: " (string-filter char-printable? comment))))
-                (display #\newline))
+                    (print "Comment: " (string-filter char-printable? comment)))))
               (filter central-directory? records))
 
     (print "----\n")

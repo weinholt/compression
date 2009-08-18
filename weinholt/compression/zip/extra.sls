@@ -17,7 +17,7 @@
 
 ;; Template for implementation hooks for (weinholt compression zip).
 
-(library (weinholt compression zip extra (0 0 20090816))
+(library (weinholt compression zip extra (0 0 20090817))
   (export call-with-adorned-output-file get-file-attributes)
   (import (rnrs)
           (srfi :19 time))
@@ -42,7 +42,7 @@
                                          internal-attributes
                                          external-attributes
                                          proc)
-    (call-with-port (open-file-output-port filename)
+    (call-with-port (open-file-input/output-port filename)
       proc))
 
   ;; This procedure will be used when creating .ZIP files. The data
