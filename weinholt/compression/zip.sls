@@ -431,9 +431,8 @@
         (case block-type
           ((#b11)
            (error 'inflate "error in compressed data (bad block type)"))
-          ((#b00)                   ;non-compressed block (not tested)
+          ((#b00)                   ;non-compressed block
            (get-bits)
-           (print "WARNING: non-compressed data")
            (let-values (((len nlen) (get-unpack in "<SS")))
              (unless (= len (fxand #xffff (fxnot nlen)))
                (error 'inflate "error in non-compressed block length" len nlen))
