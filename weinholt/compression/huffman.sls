@@ -18,18 +18,17 @@
 ;; Procedures for David Huffman's codes. These are suitable for use
 ;; with DEFLATE.
 
-(library (weinholt compression huffman (0 0 20090818))
+(library (weinholt compression huffman (0 0 20090820))
   (export reconstruct-codes
           canonical-codes->simple-lookup-table
           get-next-code)
   (import (rnrs)
           (only (srfi :1 lists) iota))
 
-
   ;; If you have a canonical Huffman tree, with a known alphabet, then
   ;; all that is needed to reconstruct the tree is the length of each
-  ;; symbol in the alphabet.
-
+  ;; symbol in the alphabet. This procedure takes a list of ((symbol .
+  ;; bit-length) ...) and computes the codes.
   (define (reconstruct-codes sym< syms+lens)
     ;; The canonical codes are described in RFC 1951 section 3.2.2.
     ;; Don't try to read their code though...
@@ -101,39 +100,58 @@
   ;;                    (flatten-huffman-tree tree)))))
 
   ;; (flatten-huffman-tree '((#\F #\A . #\B) (#\C . #\D) #\E #\G . #\H))
-  
+
   ;; (canonicalize-huffman-tree char<? '((#\F #\D . #\C) (#\B . #\A) #\E #\H . #\G))
 
-  
+
   ;; (graph '((#\F #\A . #\B) (#\C . #\D) #\E #\G . #\H))
 
-  ;; This lookup table is as simple as it gets. The performance is
-  ;; terrible.   Slow, wasteful, buggy. Pick two.
-  (define (canonical-codes->simple-lookup-table codes)
-    (do ((t (make-vector (+ 1 (fold-right max 0 (map caddr codes))) #f))
-         (codes codes (cdr codes)))
-        ((null? codes) t)
-      (vector-set! t (caddar codes) (cons (caar codes)
-                                          (cadar codes)))))
+  ;;(define (print . x) (for-each display x) (newline))
 
+  ;; This takes a list of canonical codes ((symbol bit-length code)
+  ;; ...) and constructs a lookup table. It's a one-level table (so
+  ;; don't use this with a giant code). Let M be the maximum bit
+  ;; length in the table, then this table is 2^M large, and you're
+  ;; supposed to peek M bits into the stream. Use the peek'd value as
+  ;; an index into the table, and the entry will tell you how many
+  ;; bits belong to the symbol, and what the symbol is.
+  (define (canonical-codes->simple-lookup-table codes)
+    (define cmp (lambda (x y) (< (caddr x) (caddr y))))
+    ;; (print codes)
+    (let ((maxlen (fold-right max 0 (map cadr codes))))
+      ;; (display (list 'maxlen maxlen)) (newline)
+      (do ((t (make-vector (fxarithmetic-shift-left 1 maxlen) #f))
+           (codes (list-sort cmp codes) (cdr codes)))
+          ((null? codes) (cons maxlen t))
+        (let* ((code (car codes)) (sym (car code)) (bitlen (cadr code)) (bits (caddr code)))
+          ;; (print "#;sym: " sym "  #;bitlen: "bitlen " #;bits: #b" (number->string bits 2))
+          (let* ((start (fxarithmetic-shift-left bits (- maxlen bitlen)))
+                 (end (fxior start (- (fxarithmetic-shift-left 1 (- maxlen bitlen)) 1)))
+                 (translation (cons (car code) (cadr code)))) ;(symbol . bitlength)
+            ;; (print "#;start: #b" (number->string start 2))
+            ;; (print "#;end: #b" (number->string end 2))
+            (do ((i start (+ i 1)))
+                ((> i end))
+              ;; (print (list 'set! i translation))
+              (vector-set! t (fxreverse-bit-field i 0 maxlen) translation)))))))
+
+  
   ;; (canonical-codes->simple-lookup-table
   ;;  '((#\A 3 2) (#\B 3 3) (#\C 3 4) (#\D 3 5) (#\E 3 6) (#\F 2 0) (#\G 4 14) (#\H 4 15)))
 
+
   ;; (flatten-huffman-tree '((1 4 . 3) (5 7 10 . 9) 2 (6 . 11) 8 12 . 13))
 
-  ;; This lookup code is the companion of the trivial procedure above.
+  ;; This lookup code is the companion of the procedure above.
   (define (get-next-code get-bits table)
-    (let lp ((code (get-bits 1))
-             (code-len 1))
-      (cond ((vector-ref table code)
-             =>
-             (lambda (translation)
-               (if (= code-len (cdr translation))
-                   (car translation)
-                   (lp (bitwise-ior (get-bits 1) (bitwise-arithmetic-shift-left code 1))
-                       (+ code-len 1)))))
-            (else
-             (lp (bitwise-ior (get-bits 1) (bitwise-arithmetic-shift-left code 1))
-                 (+ code-len 1))))))
+    (let ((code (get-bits (car table) 'peek)))
+      (let ((translation (vector-ref (cdr table) code)))
+        ;; (print "code: " (string-pad (number->string code 2) (cdr translation) #\0) " => " (car translation))
+        (get-bits (cdr translation))
+        (car translation))))
 
   )
+
+
+
+

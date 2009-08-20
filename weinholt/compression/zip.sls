@@ -22,7 +22,7 @@
 ;; Future work: zip64, split files, encryption, various compression
 ;; algorithms.
 
-(library (weinholt compression zip (0 0 20090818))
+(library (weinholt compression zip (0 0 20090820))
   (export supported-compression-method?
           compression-stored
           compression-shrunk
@@ -313,26 +313,39 @@
   ;; possible to copy parts of the recently decompressed data.
 
   (define (make-bit-reader port)
-    (let ((buf 0) (buflen 0))
+    ;; This is a little tricky. The compressed data is not
+    ;; byte-aligned, so there needs to be a way to read N bits from
+    ;; the input. To make the Huffman table lookup fast, we need to
+    ;; read as many bits as are needed to do a table lookup. After the
+    ;; lookup we know how many bits were used. But non-compressed
+    ;; blocks *are* byte-aligned, so there's a procedure to discard as
+    ;; many bits as are necessary to get the "buffer" byte-aligned.
+    ;; Luckily the non-compressed data starts with two u16's, so we
+    ;; don't have to mess around with lookahead-u8 here.
+    (let ((buf 0) (buflen 0) (alignment 0))
+      (define (fill count)
+        (when (< buflen count)          ;read more?
+          (set! buf (fxior (fxarithmetic-shift-left (get-u8 port) buflen)
+                           buf))
+          (set! buflen (fx+ buflen 8))
+          (fill count)))
+      (define (read count)
+        (let ((v (fxbit-field buf 0 count)))
+          (set! buf (fxarithmetic-shift-right buf count))
+          (set! buflen (fx- buflen count))
+          (set! alignment (fxand #x7 (fx+ alignment count)))
+          v))
       (case-lambda
+        ((count _)                      ;peek
+         (fill count)
+         (fxbit-field buf 0 count))
         ((count)                        ;read `count' bits
-         (let lp ()
-           (cond ((< buflen count)
-                  ;; read more
-                  (set! buf (fxior (fxarithmetic-shift-left (get-u8 port) buflen)
-                                   buf))
-                  (set! buflen (fx+ buflen 8))
-                  (lp))
-                 (else
-                  ;; use the buffer
-                  (let ((v (fxbit-field buf 0 count)))
-                    (set! buf (fxarithmetic-shift-right buf count))
-                    (set! buflen (fx- buflen count))
-                    v)))))
-        (()                             ;reset
-         (set! buf 0)
-         (set! buflen 0)))))
-
+         (fill count)
+         (read count))
+        (()                             ;seek to next byte boundary
+         (unless (zero? alignment)
+           (read (- 8 alignment)))))))
+  
   (define (vector->huffman-lookup-table codes)
     (canonical-codes->simple-lookup-table
      (reconstruct-codes
@@ -365,7 +378,7 @@
   (define dist-base
     '#(1 2 3 4 5 7 9 13 17 25 33 49 65 97 129 193 257 385 513 769 1025 1537
          2049 3073 4097 6145 8193 12289 16385 24577))
-  
+
   (define (extract-deflated-data in out n)
     (define (read-compressed-data table2 table3)
       (let ((code (get-next-code get-bits table2)))
@@ -406,7 +419,8 @@
               (else
                (error 'inflate "error in compressed data (bad literal/length)")))))
     (define (sad-crc-32-after-the-fact)
-      ;; It'd be better to do this during the unzipping
+      ;; It'd be better to do this during the unzipping, or in the
+      ;; sliding window code
       (unless (= (port-position out) n)
         (error 'extract-deflated-data "the file is not the right size..."))
       (set-port-position! out 0)
@@ -426,14 +440,12 @@
       (error 'extract-deflated-data
              "the output port should be an input/output and it needs port-position" out))
     (let more-blocks ()
-      (let* ((last? (= (get-bits 1) 1))
-             (block-type (get-bits 2)))
-        (case block-type
-          ((#b11)
-           (error 'inflate "error in compressed data (bad block type)"))
-          ((#b00)                   ;non-compressed block
-           (get-bits)
-           (let-values (((len nlen) (get-unpack in "<SS")))
+      (let ((last? (= (get-bits 1) 1)))
+        (case (get-bits 2)              ;block-type
+          ((#b00)                       ;non-compressed block
+           (get-bits)                   ;seek to a byte boundary
+           (let ((len (get-bits 16))
+                 (nlen (get-bits 16)))
              (unless (= len (fxand #xffff (fxnot nlen)))
                (error 'inflate "error in non-compressed block length" len nlen))
              (put-bytevector out (get-bytevector-n in len))))
@@ -482,7 +494,9 @@
                  (read-compressed-data (vector->huffman-lookup-table
                                         (vector-copy code-lengths 0 hlit #f))
                                        (vector->huffman-lookup-table
-                                        (vector-copy code-lengths hlit))))))))
+                                        (vector-copy code-lengths hlit)))))))
+          ((#b11)
+           (error 'inflate "error in compressed data (bad block type)")))
         (if last?
             (sad-crc-32-after-the-fact)
             (more-blocks)))))
