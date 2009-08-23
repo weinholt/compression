@@ -20,9 +20,9 @@
 ;; http://www.info-zip.org/doc/
 
 ;; Future work: zip64, split files, encryption, various compression
-;; algorithms.
+;; algorithms, create and include filesystem directories.
 
-(library (weinholt compression zip (0 0 20090820))
+(library (weinholt compression zip (0 0 20090823))
   (export supported-compression-method?
           compression-stored
           compression-shrunk
@@ -81,7 +81,8 @@
 
           get-central-directory
           central-directory->file-record
-          extract-file)
+          extract-file
+          create-file)
   (import (rnrs)
           (only (srfi :1 lists) iota)
           (only (srfi :13 strings) string-suffix?)
@@ -152,6 +153,15 @@
             (cons (cons id (bytevector-copy* bv (+ i (format-size "<uSS")) len))
                   (lp (+ i (format-size "<uSS") len)))))))
 
+  (define (extra-length x)
+    (fold-right (lambda (extra sum)
+                  (+ sum 4 (bytevector-length (cdr extra))))
+                0 x))
+
+  (define (put-extra-field port x)
+    (put-bytevector port (pack "<SS" (car x) (bytevector-length (cdr x))))
+    (put-bytevector port (cdr x)))
+
   ;; File records with filenames that end with / are directories.
   (define-record-type file-record
     (fields minimum-version flags compression-method
@@ -196,6 +206,21 @@
                         filename extra
                         pos)))
 
+  (define (put-file-record port rec)
+    (put-bytevector port (pack "<uSSSSSLLLSS"
+                               (file-record-minimum-version rec)
+                               (file-record-flags rec)
+                               (file-record-compression-method rec)
+                               0        ;fixme date
+                               0        ;fixme date
+                               (file-record-crc-32 rec)
+                               (file-record-compressed-size rec)
+                               (file-record-uncompressed-size rec)
+                               (string-length (file-record-filename rec))
+                               (extra-length (file-record-extra rec))))
+    (put-bytevector port (string->utf8 (file-record-filename rec)))
+    (for-each (lambda (e) (put-extra-field port e)) (file-record-extra rec)))
+
   (define-record-type central-directory
     (fields version-made-by
             os-made-by
@@ -226,6 +251,29 @@
                               disk-number-start internal-attributes external-attributes
                               local-header-offset filename extra comment)))
 
+  (define (put-central-directory-record port rec)
+    (put-bytevector port (pack "<uCCSSS SSLL LSSS SSLL"
+                               (central-directory-version-made-by rec)
+                               (central-directory-os-made-by rec)
+                               (central-directory-minimum-version rec)
+                               (central-directory-flags rec)
+                               (central-directory-compression-method rec)
+                               0        ;FIXME
+                               0        ;FIXME
+                               (central-directory-crc-32 rec)
+                               (central-directory-compressed-size rec)
+                               (central-directory-uncompressed-size rec)
+                               (string-length (central-directory-filename rec))
+                               (extra-length (central-directory-extra rec))
+                               (string-length (central-directory-comment rec))
+                               (central-directory-disk-number-start rec)
+                               (central-directory-internal-attributes rec)
+                               (central-directory-external-attributes rec)
+                               (central-directory-local-header-offset rec)))
+    (put-bytevector port (string->utf8 (central-directory-filename rec)))
+    (for-each (lambda (e) (put-extra-field port e)) (central-directory-extra rec))
+    (put-bytevector port (string->utf8 (central-directory-comment rec))))
+
   (define (central-directory-filetype rec)
     (cond ((and (not (central-directory-date rec))
                 (= os-dos (central-directory-os-made-by rec)))
@@ -242,22 +290,28 @@
             total-entries size offset comment))
 
   (define (get-end-of-central-directory-record port)
-    (let*-values (((disk-number
-                    start-disk-number
-                    central-directory-entries
-                    total-central-directory-entries
-                    central-directory-size
-                    central-directory-offset
-                    comment-length)
+    (let*-values (((disk
+                    start-disk
+                    entries total-entries
+                    size offset comment-length)
                    (get-unpack port "<uSSSSLLS"))
                   ((comment) (get-bytevector-n port comment-length)))
       (make-end-of-central-directory
-       disk-number start-disk-number
-       central-directory-entries
-       total-central-directory-entries
-       central-directory-size central-directory-offset
+       disk start-disk entries total-entries size offset
        (utf8->string comment))))
 
+  (define (put-end-of-central-directory-record port rec)
+    (put-bytevector port (pack "<uSSSSLLS"
+                               (end-of-central-directory-disk rec)
+                               (end-of-central-directory-start-disk rec)
+                               (end-of-central-directory-entries rec)
+                               (end-of-central-directory-total-entries rec)
+                               (end-of-central-directory-size rec)
+                               (end-of-central-directory-offset rec)
+                               (string-length (end-of-central-directory-comment rec))))
+    (put-bytevector port (string->utf8 (end-of-central-directory-comment rec))))
+
+  
   (define (get-zip-record port)
     (let ((sig (get-unpack port "<L")))
       (case sig
@@ -270,6 +324,19 @@
                  (make-who-condition 'get-zip-record)
                  (make-message-condition "unknown header signature")
                  (make-irritants-condition sig)))))))
+
+  (define (put-zip-record port rec)
+    (cond ((file-record? rec)
+           (put-bytevector port (pack "<L" #x04034b50))
+           (put-file-record port rec))
+          ((central-directory? rec)
+           (put-bytevector port (pack "<L" #x02014b50))
+           (put-central-directory-record port rec))
+          ((end-of-central-directory? rec)
+           (put-bytevector port (pack "<L" #x06054b50))
+           (put-end-of-central-directory-record port rec))
+          (else
+           (error 'put-zip-record "unknown record type" rec))))
 
   (define (get-all-zip-records port)
     (set-port-position! port 0)
@@ -345,7 +412,7 @@
         (()                             ;seek to next byte boundary
          (unless (zero? alignment)
            (read (- 8 alignment)))))))
-  
+
   (define (vector->huffman-lookup-table codes)
     (canonical-codes->simple-lookup-table
      (reconstruct-codes
@@ -415,7 +482,7 @@
                             ;; (print "LITERAL: '" (utf8->string data) "'")
                             (put-bytevector out data)))))
                  (read-compressed-data table2 table3)))
-              ((= 256))                 ;end of block
+              ((= 256 code))            ;end of block
               (else
                (error 'inflate "error in compressed data (bad literal/length)")))))
     (define (sad-crc-32-after-the-fact)
@@ -529,4 +596,56 @@
                         (make-who-condition 'get-file-record)
                         (make-unsupported-error)
                         (make-message-condition "unimplemented compression method")
-                        (make-irritants-condition m))))))))))
+                        (make-irritants-condition m)))))))))
+
+  ;; This puts in a complete file record, including the file and
+  ;; returns a central-directory record. The port is positioned to
+  ;; right after the file.
+  (define (append-file port filename)
+    (let-values (((date
+                   local-extra central-extra os-made-by
+                   internal-attributes external-attributes)
+                  (get-file-attributes filename))
+                 ((frpos) (port-position port)))
+      ;; Put in a dummy file record which will be overwritten later
+      (put-zip-record port (make-file-record
+                            10 0 compression-stored date 0 0 0
+                            filename local-extra #f))
+      (let* ((in (open-file-input-port filename))
+             (datapos (port-position port))
+             (bufsize (* 1024 1024))
+             (buf (make-bytevector bufsize)))
+        (let lp ((crc (crc-32-init))
+                 (n 0))
+          (let ((read (get-bytevector-n! in buf 0 bufsize)))
+            (cond ((eof-object? read)
+                   (let ((crc (crc-32-finish crc)))
+                     (close-port in)
+                     (set-port-position! port frpos)
+                     (put-zip-record port (make-file-record
+                                           10 0 compression-stored date crc n n
+                                           filename local-extra #f))
+                     (set-port-position! port (+ n datapos))
+                     (make-central-directory
+                      10 os-made-by 10 0 compression-stored date
+                      crc n n 0
+                      internal-attributes external-attributes frpos
+                      filename central-extra "")))
+                  (else
+                   (put-bytevector port buf 0 read)
+                   (lp (crc-32-update crc buf 0 read)
+                       (+ n read)))))))))
+
+  (define (create-file port filenames)
+    (let* ((centrals
+            (map (lambda (fn) (append-file port fn))
+                 filenames))
+           (central-start (port-position port)))
+      (flush-output-port port)
+      (for-each (lambda (r) (put-zip-record port r)) centrals)
+      (put-zip-record port (make-end-of-central-directory
+                            0 0 (length centrals) (length centrals)
+                            (- (port-position port) central-start)
+                            central-start ""))))
+
+  )
