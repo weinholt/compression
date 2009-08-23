@@ -145,6 +145,16 @@
            (make-date 0 second minute hour day month year
                       (date-zone-offset (current-date)))))) ;local time
 
+  (define (date->dos-time date)
+    (fxior (fxarithmetic-shift-left (date-hour date) 11)
+           (fxarithmetic-shift-left (date-minute date) 5)
+           (fxdiv (date-second date) 2)))
+    
+  (define (date->dos-date date)
+    (fxior (fxarithmetic-shift-left (- (date-year date) 1980) 9)
+           (fxarithmetic-shift-left (date-month date) 5)
+           (date-day date)))
+  
   (define (parse-extra-field bv)
     (let lp ((i 0))
       (if (= i (bytevector-length bv))
@@ -211,8 +221,8 @@
                                (file-record-minimum-version rec)
                                (file-record-flags rec)
                                (file-record-compression-method rec)
-                               0        ;fixme date
-                               0        ;fixme date
+                               (date->dos-time (file-record-date rec))
+                               (date->dos-date (file-record-date rec))
                                (file-record-crc-32 rec)
                                (file-record-compressed-size rec)
                                (file-record-uncompressed-size rec)
@@ -258,8 +268,8 @@
                                (central-directory-minimum-version rec)
                                (central-directory-flags rec)
                                (central-directory-compression-method rec)
-                               0        ;FIXME
-                               0        ;FIXME
+                               (date->dos-time (central-directory-date rec))
+                               (date->dos-date (central-directory-date rec))
                                (central-directory-crc-32 rec)
                                (central-directory-compressed-size rec)
                                (central-directory-uncompressed-size rec)
