@@ -17,10 +17,24 @@
 
 ;; Template for implementation hooks for (weinholt compression zip).
 
-(library (weinholt compression zip extra (0 0 20090817))
+;; The R6RS does not specify many file system operations and does not
+;; specify how filenames are handled. It does not have operations for
+;; creating directories or looking up file attributes. So you can
+;; override this library and translate between zip's idea of file
+;; names and attributes, and your operating system's idea of the same.
+
+;; This default library only does as much as is possible with R6RS.
+
+(library (weinholt compression zip extra (0 0 20090824))
   (export call-with-adorned-output-file get-file-attributes)
   (import (rnrs)
+          (only (srfi :13 strings) string-suffix? string-trim)
           (srfi :19 time))
+
+  (define os-dos 0)
+  (define os-openvms 2)
+  (define os-unix 3)
+  ;; etc etc
 
   ;; This procedure functions like call-with-output-file, except it
   ;; can optionally set the file's timestamps and other attributes.
@@ -36,21 +50,57 @@
 
   ;; The port should be in binary mode.
 
-  (define (call-with-adorned-output-file filename date local-extra
+  ;; call-with-adorned-output-file will be called for all file records
+  ;; in a .zip file, even directories. Only call `proc' for files!
+  ;; Return zero if you don't call proc, because zero is the CRC-32 of
+  ;; directories etc.
+
+  ;; It's your responsibility to create any directories that are
+  ;; needed to create the file.
+
+  ;; It's also your responsibility to make sure that you only create
+  ;; files under the current directory. The inzip-filename is
+  ;; supposed to be relative, but it *could* be an absolute filename,
+  ;; and someone might create such a zip file to make you create a
+  ;; file in some unexpected place. The caller checks that filenames
+  ;; don't begin with a #\/, but checking for things like C:\ and
+  ;; SYS$LOGIN:LOGIN.COM is your responsibility, because only you know
+  ;; your operating system's filename specification.
+  
+  (define (call-with-adorned-output-file inzip-filename date local-extra
                                          central-extra
                                          os-made-by
                                          internal-attributes
                                          external-attributes
+                                         uncompressed-size
                                          proc)
-    (call-with-port (open-file-input/output-port filename)
-      proc))
+    (cond ((and (string-suffix? "/" inzip-filename) (zero? uncompressed-size))
+           ;; Directory. Optimally you would create the directory
+           ;; here, and not print anything.
+           (display "directories not implemented. ")
+           -1)
+          ((and (not date) (= os-dos os-made-by) (zero? uncompressed-size))
+           ;; Volume label. Should be ignored, methinks.
+           0)
+          (else
+           (call-with-port (open-file-input/output-port inzip-filename)
+             proc))))
 
   ;; This procedure will be used when creating .ZIP files. The data
-  ;; types are the same as for the previous procedure.
-  (define (get-file-attributes filename)
-    (values (current-date)              ;date
-            '()                         ;local-extra
-            '()                         ;central-extra
-            0                           ;os-made-by
-            0                           ;internal-attributes
-            0)))                        ;external-attributes
+  ;; types are the same as for the previous procedure, except the
+  ;; filename is from the implementation's perspective. The *returned*
+  ;; filename should be suitable for inclusion in the .zip file. This
+  ;; means that the path separator becomes #\/ and directories have a
+  ;; #\/ appended.
+  (define (get-file-attributes implementation-filename)
+    (values
+      ;; Remove leading /
+      (string-trim implementation-filename #\/) ;filename in .zip file
+      (current-date)                    ;date
+      '()                               ;local-extra
+      '()                               ;central-extra
+      0                                 ;os-made-by
+      0                                 ;internal-attributes
+      0))                               ;external-attributes
+
+  )

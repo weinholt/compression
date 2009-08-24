@@ -22,7 +22,7 @@
 ;; Future work: zip64, split files, encryption, various compression
 ;; algorithms, create and include filesystem directories.
 
-(library (weinholt compression zip (0 0 20090823))
+(library (weinholt compression zip (0 0 20090824))
   (export supported-compression-method?
           compression-stored
           compression-shrunk
@@ -68,8 +68,6 @@
           central-directory-extra
           central-directory-comment
 
-          central-directory-filetype
-
           end-of-central-directory?
           end-of-central-directory-disk
           end-of-central-directory-start-disk
@@ -85,7 +83,8 @@
           create-file)
   (import (rnrs)
           (only (srfi :1 lists) iota)
-          (only (srfi :13 strings) string-suffix?)
+          (only (srfi :13 strings) string-prefix? string-suffix?
+                string-contains)
           (srfi :19 time)
           (only (srfi :43 vectors) vector-copy)
           (weinholt struct pack (1 (>= 3)))
@@ -96,11 +95,6 @@
   (define-crc crc-32)
 
   (define (print . x) (for-each display x) (newline))
-
-  (define os-dos 0)
-  (define os-openvms 2)
-  (define os-unix 3)
-  ;; etc etc
 
   (define compression-stored 0)
   (define compression-shrunk 1)
@@ -114,6 +108,9 @@
   (define compression-pkimplode 10)
   (define compression-bzip2 12)
 
+  (define version-1.0 10)
+  (define version-2.0 20)
+  
   (define (supported-compression-method? m)
     (or (= m compression-stored)
         (= m compression-deflated)))
@@ -181,6 +178,10 @@
             extra                       ;alist of (id . bytevector)
             data-port-position))
 
+  (define (bad-filename? fn)
+    (or (string-prefix? "/" fn)
+        (string-contains fn "//")))
+  
   (define (get-file-record port)
     (let*-values (((minimum-version
                     flags compression-method
@@ -191,6 +192,8 @@
                   ((filename) (utf8->string (get-bytevector-n port filename-length)))
                   ((extra) (get-bytevector-n port extra-length))
                   ((pos) (port-position port)))
+      (when (bad-filename? filename)
+        (error 'get-file-record "Bad filename" filename))
       (when (fxbit-set? flags 3)
         ;; To support this, I think it's necessary to first find the
         ;; central directory and get the file sizes from there.
@@ -254,6 +257,8 @@
                   ((filename) (utf8->string (get-bytevector-n port filename-length)))
                   ((extra) (parse-extra-field (get-bytevector-n port extra-length)))
                   ((comment) (utf8->string (get-bytevector-n port comment-length))))
+      (when (bad-filename? filename)
+        (error 'get-file-record "Bad filename" filename))
       (make-central-directory version-made-by os-made-by
                               minimum-version flags compression-method
                               (dos-time+date->date last-mod-file-time last-mod-file-date)
@@ -283,17 +288,6 @@
     (put-bytevector port (string->utf8 (central-directory-filename rec)))
     (for-each (lambda (e) (put-extra-field port e)) (central-directory-extra rec))
     (put-bytevector port (string->utf8 (central-directory-comment rec))))
-
-  (define (central-directory-filetype rec)
-    (cond ((and (not (central-directory-date rec))
-                (= os-dos (central-directory-os-made-by rec)))
-           ;; TODO: I'm not sure here, just guessing. Didn't see
-           ;; anything about this in the spec, but zip16.exe put a bad
-           ;; date on the volume label...
-           'volume-label)
-          ((string-suffix? "/" (central-directory-filename rec))
-           'directory)
-          (else 'file)))
 
   (define-record-type end-of-central-directory
     (fields disk start-disk entries
@@ -593,6 +587,7 @@
      (central-directory-os-made-by central)
      (central-directory-internal-attributes central)
      (central-directory-external-attributes central)
+     (central-directory-uncompressed-size central)
      (lambda (o)
        (let ((m (central-directory-compression-method central)))
          (cond ((= m compression-stored)
@@ -612,39 +607,48 @@
   ;; returns a central-directory record. The port is positioned to
   ;; right after the file.
   (define (append-file port filename)
-    (let-values (((date
-                   local-extra central-extra os-made-by
+    (let-values (((filename             ;filename changed for the .zip file
+                   date local-extra central-extra os-made-by
                    internal-attributes external-attributes)
                   (get-file-attributes filename))
                  ((frpos) (port-position port)))
-      ;; Put in a dummy file record which will be overwritten later
+      ;; Put in a dummy file record which will be overwritten later.
+      ;; The dummy is also suitable for directories.
       (put-zip-record port (make-file-record
                             10 0 compression-stored date 0 0 0
                             filename local-extra #f))
-      (let* ((in (open-file-input-port filename))
-             (datapos (port-position port))
-             (bufsize (* 1024 1024))
-             (buf (make-bytevector bufsize)))
-        (let lp ((crc (crc-32-init))
-                 (n 0))
-          (let ((read (get-bytevector-n! in buf 0 bufsize)))
-            (cond ((eof-object? read)
-                   (let ((crc (crc-32-finish crc)))
-                     (close-port in)
-                     (set-port-position! port frpos)
-                     (put-zip-record port (make-file-record
-                                           10 0 compression-stored date crc n n
-                                           filename local-extra #f))
-                     (set-port-position! port (+ n datapos))
-                     (make-central-directory
-                      10 os-made-by 10 0 compression-stored date
-                      crc n n 0
-                      internal-attributes external-attributes frpos
-                      filename central-extra "")))
-                  (else
-                   (put-bytevector port buf 0 read)
-                   (lp (crc-32-update crc buf 0 read)
-                       (+ n read)))))))))
+      (cond ((string-suffix? "/" filename)
+             ;; Directory
+             (make-central-directory
+              version-1.0 os-made-by version-1.0 0 compression-stored
+              date 0 0 0 0 internal-attributes external-attributes frpos
+              filename central-extra ""))
+            (else
+             (let* ((in (open-file-input-port filename))
+                    (datapos (port-position port))
+                    (bufsize (* 1024 1024))
+                    (buf (make-bytevector bufsize)))
+               (let lp ((crc (crc-32-init))
+                        (n 0))
+                 (let ((read (get-bytevector-n! in buf 0 bufsize)))
+                   (cond ((eof-object? read)
+                          (let ((crc (crc-32-finish crc)))
+                            (close-port in)
+                            (set-port-position! port frpos)
+                            (put-zip-record port (make-file-record
+                                                  version-1.0 0
+                                                  compression-stored date crc n n
+                                                  filename local-extra #f))
+                            (set-port-position! port (+ n datapos))
+                            (make-central-directory
+                             version-1.0 os-made-by version-1.0 0
+                             compression-stored date crc n n 0
+                             internal-attributes external-attributes frpos
+                             filename central-extra "")))
+                         (else
+                          (put-bytevector port buf 0 read)
+                          (lp (crc-32-update crc buf 0 read)
+                              (+ n read)))))))))))
 
   (define (create-file port filenames)
     (let* ((centrals

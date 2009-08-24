@@ -43,6 +43,7 @@ Author: Göran Weinholt <goran@weinholt.se>.
           (else
            (call-with-port (open-file-input/output-port (car args))
              (lambda (p)
+               ;; TODO: output. :)
                (create-file p (cdr args))))))))
 
 (parse-args (cdr (command-line)))
