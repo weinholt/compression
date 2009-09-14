@@ -42,8 +42,30 @@ Author: Göran Weinholt <goran@weinholt.se>.
            (help "ERROR: No filename given."))
           (else
            (call-with-port (open-file-input/output-port (car args))
-             (lambda (p)
-               ;; TODO: output. :)
-               (create-file p (cdr args))))))))
+             (lambda (zipport)
+               (print "Creating ZIP archive: " (car args) "\n")
+               (let lp ((files (cdr args))
+                        (centrals '()))
+                 (cond ((null? files)
+                        (append-central-directory zipport (reverse centrals)))
+                       (else
+                        (display "Adding ")
+                        (display (car files))
+                        (display " ... ")
+                        (flush-output-port (current-output-port))
+                        (let ((central-rec (append-file zipport (car files))))
+                          (print (if (zero? (central-directory-uncompressed-size
+                                             central-rec))
+                                     100
+                                     (exact
+                                      (round
+                                       (inexact
+                                        (* 100 (/ (central-directory-compressed-size
+                                                   central-rec)
+                                                  (central-directory-uncompressed-size
+                                                   central-rec)))))))
+                                 "%")
+                          (lp (cdr files)
+                              (cons central-rec centrals))))))))))))
 
 (parse-args (cdr (command-line)))
