@@ -98,7 +98,19 @@
 
   (define (print . x) (for-each display x) (newline))
 
-  (define (vector-copy x) (vector-map (lambda (i) i) x))
+  (define vector-copy
+    (case-lambda
+      ((vec start end fill)
+       (let ((result (make-vector (- end start) fill)))
+         (do ((i (- (min (vector-length vec) end) 1) (- i 1)))
+             ((< i start) result)
+           (vector-set! result (- i start) (vector-ref vec i)))))
+      ((vec start end)
+       (vector-copy vec start end #f))
+      ((vec start)
+       (vector-copy vec start (vector-length vec) #f))
+      ((vec)
+       (vector-copy vec 0 (vector-length vec) #f))))
 
   (define compression-stored 0)
   (define compression-shrunk 1)
