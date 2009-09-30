@@ -25,7 +25,7 @@
 
 ;; This default library only does as much as is possible with R6RS.
 
-(library (weinholt compression zip extra (0 0 20090824))
+(library (weinholt compression zip extra (0 0 20090930))
   (export call-with-adorned-output-file get-file-attributes)
   (import (rnrs)
           (only (srfi :13 strings) string-suffix? string-trim)
@@ -83,7 +83,7 @@
            ;; Volume label. Should be ignored, methinks.
            0)
           (else
-           (call-with-port (open-file-input/output-port inzip-filename)
+           (call-with-port (open-file-output-port inzip-filename)
              proc))))
 
   ;; This procedure will be used when creating .ZIP files. The data

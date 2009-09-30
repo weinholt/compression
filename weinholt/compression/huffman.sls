@@ -18,12 +18,24 @@
 ;; Procedures for David Huffman's codes. These are suitable for use
 ;; with DEFLATE.
 
-(library (weinholt compression huffman (0 0 20090820))
+(library (weinholt compression huffman (0 0 20090930))
   (export reconstruct-codes
           canonical-codes->simple-lookup-table
           get-next-code)
-  (import (rnrs)
+  (import (except (rnrs) fxreverse-bit-field)
           (only (srfi :1 lists) iota))
+
+  (define (fxreverse-bit-field v start end)
+    ;; This is only for the benefit of Ikarus, which does not
+    ;; implement this procedure as of 2009-09-30.
+    (do ((i start (fx+ i 1))
+         (ret 0 (if (fxbit-set? v i)
+                    (fxior ret (fxarithmetic-shift-left 1 (fx- (fx- end i) 1)))
+                    ret)))
+        ((fx=? i end)
+         (fxior (fxarithmetic-shift-left ret start)
+                (fxcopy-bit-field v start end 0)))))
+
 
   ;; If you have a canonical Huffman tree, with a known alphabet, then
   ;; all that is needed to reconstruct the tree is the length of each
