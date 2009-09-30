@@ -41,7 +41,7 @@ Author: Göran Weinholt <goran@weinholt.se>.
           ((null? args)
            (help "ERROR: No filename given."))
           (else
-           (call-with-port (open-file-input/output-port (car args))
+           (call-with-port (open-file-output-port (car args))
              (lambda (zipport)
                (print "Creating ZIP archive: " (car args) "\n")
                (let lp ((files (cdr args))
