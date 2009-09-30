@@ -92,12 +92,20 @@
           (srfi :19 time)
           (weinholt struct pack (1 (>= 3)))
           (weinholt crypto crc (1 (>= 0)))
+          (weinholt compression sliding-buffer)
           (weinholt compression zip extra (0 (>= 0)))
           (weinholt compression huffman (0 (>= 0))))
 
   (define-crc crc-32)
 
-  (define (print . x) (for-each display x) (newline))
+  (define-syntax trace
+    (syntax-rules ()
+      #;
+      ((_ . args)
+       (begin
+         (for-each display (list . args))
+         (newline)))
+      ((_ . args) (begin 'dummy))))
 
   (define vector-copy
     (case-lambda
@@ -468,126 +476,101 @@
          2049 3073 4097 6145 8193 12289 16385 24577))
 
   (define (extract-deflated-data in out n)
-    (define (read-compressed-data table2 table3)
-      (let ((code (get-next-code get-bits table2)))
-        (cond ((< code 256)             ;literal byte
-               ;; (print "LITERAL: '" (integer->char code) "'")
-               (put-u8 out code)
-               (read-compressed-data table2 table3))
-              ((<= 257 code 285)
-               ;;(print "\nlen code: " code)
-               (let* ((len (+ (get-bits (vector-ref len-extra (- code 257)))
-                              (vector-ref len-base (- code 257))))
-                      (distcode (get-next-code get-bits table3))
-                      (dist (+ (get-bits (vector-ref dist-extra distcode))
-                               (vector-ref dist-base distcode))))
-                 ;; (print "len: " len "  dist: " dist "  @ position: " (port-position out))
-                 (let ((p (port-position out)))
-                   ;; (print "COPYING FROM POSITION: " (- p dist)  " THIS MUCH: " len)
-                   (cond ((< dist len)
-                          (let lp ((len len) (p p))
-                            ;; This is really stupid. Took me two
-                            ;; hours to figure out what was wrong and
-                            ;; put in this ugly fix.
-                            (unless (zero? len)
-                              (set-port-position! out (- p dist))
-                              (let ((b (get-u8 out)))
-                                (set-port-position! out p)
-                                ;; (print "LITERAL: '" (integer->char b) "'")
-                                (put-u8 out b)
-                                (lp (- len 1) (+ p 1))))))
-                         (else
-                          (set-port-position! out (- p dist))
-                          (let ((data (get-bytevector-n out len)))
-                            (set-port-position! out p)
-                            ;; (print "LITERAL: '" (utf8->string data) "'")
-                            (put-bytevector out data)))))
-                 (read-compressed-data table2 table3)))
-              ((= 256 code))            ;end of block
-              (else
-               (error 'inflate "error in compressed data (bad literal/length)")))))
-    (define (sad-crc-32-after-the-fact)
-      ;; It'd be better to do this during the unzipping, or in the
-      ;; sliding window code
-      (unless (= (port-position out) n)
-        (error 'extract-deflated-data "the file is not the right size..."))
-      (set-port-position! out 0)
-      (let* ((bufsize (min n (* 1024 1024)))
-             (buf (make-bytevector bufsize)))
-        (let lp ((crc (crc-32-init))
-                 (n n))
-          (if (zero? n)
-              (crc-32-finish crc)
-              (let ((read (get-bytevector-n! out buf 0 (min n bufsize))))
-                (lp (crc-32-update crc buf 0 read)
-                    (- n read)))))))
-    (define get-bits (make-bit-reader in))
-    (unless (and (port-has-port-position? out)
-                 (port-has-set-port-position!? out)
-                 (input-port? out) (output-port? out))
-      (error 'extract-deflated-data
-             "the output port should be an input/output and it needs port-position" out))
-    (let more-blocks ()
-      (let ((last? (= (get-bits 1) 1)))
-        (case (get-bits 2)              ;block-type
-          ((#b00)                       ;non-compressed block
-           (get-bits)                   ;seek to a byte boundary
-           (let ((len (get-bits 16))
-                 (nlen (get-bits 16)))
-             (unless (= len (fxand #xffff (fxnot nlen)))
-               (error 'inflate "error in non-compressed block length" len nlen))
-             (put-bytevector out (get-bytevector-n in len))))
-          ((#b01)                       ;static Huffman tree
-           (read-compressed-data static-table2 static-table3))
-          ((#b10)                       ;dynamic Huffman tree
-           (let* ((hlit (+ 257 (get-bits 5)))
-                  (hdist (+ 1 (get-bits 5)))
-                  (hclen (+ 4 (get-bits 4))))
-             (when (or (> hlit 286) (> hclen 19))
-               (error 'inflate "bad number of literal/length codes" hlit hclen))
-             ;; Up to 19 code lengths are now read...
-             (let ((table1
-                    (do ((order '#(16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15))
-                         (i 0 (+ i 1))
-                         (codes (make-vector 19 0)))
-                        ((= i hclen)
-                         ;; The 19 codes represent a canonical
-                         ;; Huffman table.
-                         (vector->huffman-lookup-table codes))
-                      (vector-set! codes (vector-ref order i)
-                                   (get-bits 3)))))
-               ;; Table 1 is now used to encode the `code-lengths'
-               ;; canonical Huffman table.
-               (let ((code-lengths (make-vector (+ hlit hdist) 0)))
-                 (let lp ((n 0))
-                   (unless (= n (+ hlit hdist))
-                     (let ((blc (get-next-code get-bits table1)))
-                       (cond
-                         ((< blc 16)    ;literal code
-                          (vector-set! code-lengths n blc)
-                          (lp (+ n 1)))
-                         ((= blc 16)    ;copy previous code
-                          (let ((rep (+ 3 (get-bits 2))))
-                            (do ((i 0 (+ i 1)))
-                                ((= i rep)
-                                 (lp (+ n rep)))
-                              (vector-set! code-lengths (+ n i)
-                                           (vector-ref code-lengths (- n 1))))))
-                         ((= blc 17)    ;fill with zeros
-                          (lp (+ n (+ 3 (get-bits 3)))))
-                         (else          ;fill with zeros (= blc 18)
-                          (lp (+ n (+ 11 (get-bits 7)))))))))
-                 ;; Table 2 is for lengths, literals and the
-                 ;; end-of-block. Table 3 is for distance codes.
-                 (read-compressed-data (vector->huffman-lookup-table
-                                        (vector-copy code-lengths 0 hlit #f))
-                                       (vector->huffman-lookup-table
-                                        (vector-copy code-lengths hlit)))))))
-          ((#b11)
-           (error 'inflate "error in compressed data (bad block type)")))
-        (if last?
-            (sad-crc-32-after-the-fact)
-            (more-blocks)))))
+    (let* ((crc (crc-32-init))
+           (output-len 0)
+           (buffer (make-sliding-buffer
+                    (lambda (bytevector start count)
+                      (put-bytevector out bytevector start count)
+                      (set! crc (crc-32-update crc bytevector start count))
+                      (set! output-len (+ output-len count)))
+                    (* 32 1024))))
+      (define (read-compressed-data table2 table3)
+        (let ((code (get-next-code get-bits table2)))
+          (cond ((< code 256)           ;literal byte
+                 (trace "LITERAL:" code)
+                 (sliding-buffer-put-u8! buffer code)
+                 (read-compressed-data table2 table3))
+                ((<= 257 code 285)
+                 (trace "\nlen code: " code)
+                 (let* ((len (+ (get-bits (vector-ref len-extra (- code 257)))
+                                (vector-ref len-base (- code 257))))
+                        (distcode (get-next-code get-bits table3))
+                        (dist (+ (get-bits (vector-ref dist-extra distcode))
+                                 (vector-ref dist-base distcode))))
+                   (trace "len: " len "  dist: " dist "  @ position: " (port-position out))
+                   (trace "COPYING FROM POSITION: " dist  " THIS MUCH: " len)
+                   (sliding-buffer-dup! buffer dist len)
+                   (read-compressed-data table2 table3)))
+                ((= 256 code))          ;end of block
+                (else
+                 (error 'inflate "error in compressed data (bad literal/length)")))))
+      (define get-bits (make-bit-reader in))
+      (let more-blocks ()
+        (let ((last? (= (get-bits 1) 1)))
+          (case (get-bits 2)            ;block-type
+            ((#b00)                     ;non-compressed block
+             (get-bits)                 ;seek to a byte boundary
+             (let ((len (get-bits 16))
+                   (nlen (get-bits 16)))
+               (unless (= len (fxand #xffff (fxnot nlen)))
+                 (error 'inflate "error in non-compressed block length" len nlen))
+               (unless (eqv? len (sliding-buffer-read! buffer in len))
+                 (error 'inflate "premature EOF encountered" ))))
+            ((#b01)                     ;static Huffman tree
+             (read-compressed-data static-table2 static-table3))
+            ((#b10)                     ;dynamic Huffman tree
+             (let* ((hlit (+ 257 (get-bits 5)))
+                    (hdist (+ 1 (get-bits 5)))
+                    (hclen (+ 4 (get-bits 4))))
+               (when (or (> hlit 286) (> hclen 19))
+                 (error 'inflate "bad number of literal/length codes" hlit hclen))
+               ;; Up to 19 code lengths are now read...
+               (let ((table1
+                      (do ((order '#(16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15))
+                           (i 0 (+ i 1))
+                           (codes (make-vector 19 0)))
+                          ((= i hclen)
+                           ;; The 19 codes represent a canonical
+                           ;; Huffman table.
+                           (vector->huffman-lookup-table codes))
+                        (vector-set! codes (vector-ref order i)
+                                     (get-bits 3)))))
+                 ;; Table 1 is now used to encode the `code-lengths'
+                 ;; canonical Huffman table.
+                 (let ((code-lengths (make-vector (+ hlit hdist) 0)))
+                   (let lp ((n 0))
+                     (unless (= n (+ hlit hdist))
+                       (let ((blc (get-next-code get-bits table1)))
+                         (cond
+                           ((< blc 16)  ;literal code
+                            (vector-set! code-lengths n blc)
+                            (lp (+ n 1)))
+                           ((= blc 16)  ;copy previous code
+                            (let ((rep (+ 3 (get-bits 2))))
+                              (do ((i 0 (+ i 1)))
+                                  ((= i rep)
+                                   (lp (+ n rep)))
+                                (vector-set! code-lengths (+ n i)
+                                             (vector-ref code-lengths (- n 1))))))
+                           ((= blc 17)  ;fill with zeros
+                            (lp (+ n (+ 3 (get-bits 3)))))
+                           (else        ;fill with zeros (= blc 18)
+                            (lp (+ n (+ 11 (get-bits 7)))))))))
+                   ;; Table 2 is for lengths, literals and the
+                   ;; end-of-block. Table 3 is for distance codes.
+                   (read-compressed-data (vector->huffman-lookup-table
+                                          (vector-copy code-lengths 0 hlit #f))
+                                         (vector->huffman-lookup-table
+                                          (vector-copy code-lengths hlit)))))))
+            ((#b11)
+             (error 'inflate "error in compressed data (bad block type)")))
+          (cond (last?
+                 (sliding-buffer-drain! buffer)
+                 (unless (= output-len n)
+                   (error 'extract-deflated-data "the file is not the right size..."))
+                 (crc-32-finish crc))
+                (else
+                 (more-blocks)))))))
 
 ;;;
 
