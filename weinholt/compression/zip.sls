@@ -80,6 +80,7 @@
           get-central-directory
           central-directory->file-record
           extract-file
+          extract-to-port
           append-file
           append-port
           append-central-directory
@@ -594,7 +595,6 @@
   (define (extract-file port local central)
     (assert (file-record? local))
     (assert (central-directory? central))
-    (set-port-position! port (file-record-data-port-position local))
     (call-with-adorned-output-file
      (central-directory-filename central)
      (central-directory-date central)
@@ -604,20 +604,23 @@
      (central-directory-internal-attributes central)
      (central-directory-external-attributes central)
      (central-directory-uncompressed-size central)
-     (lambda (o)
-       (let ((m (central-directory-compression-method central)))
-         (cond ((= m compression-stored)
-                (extract-stored-data port o (central-directory-uncompressed-size
-                                             central)))
-               ((= m compression-deflated)
-                (extract-deflated-data port o (central-directory-uncompressed-size
-                                               central)))
-               (else
-                (raise (condition
-                        (make-who-condition 'get-file-record)
-                        (make-unsupported-error)
-                        (make-message-condition "unimplemented compression method")
-                        (make-irritants-condition m)))))))))
+      (lambda (o)
+        (extract-to-port port local central o))))
+
+  (define (extract-to-port zip-port local central dest-port)
+    (set-port-position! zip-port (file-record-data-port-position local))
+    (let ((m (central-directory-compression-method central))
+          (uncompressed-size (central-directory-uncompressed-size central)))
+      (cond ((= m compression-stored)
+             (extract-stored-data zip-port dest-port uncompressed-size))
+            ((= m compression-deflated)
+             (extract-deflated-data zip-port dest-port uncompressed-size))
+            (else
+             (raise (condition
+                     (make-who-condition 'get-file-record)
+                     (make-unsupported-error)
+                     (make-message-condition "unimplemented compression method")
+                     (make-irritants-condition m)))))))
 
   ;; This puts in a complete file record, including the file and
   ;; returns a central-directory record. The port is positioned to
