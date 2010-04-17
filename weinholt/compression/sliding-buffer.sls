@@ -19,6 +19,10 @@
 
 ;;; Commentary:
 
+;; Modified on 2010-04-17 by Göran Weinholt <goran@weinholt.se>
+;;  Fixed a bug where sliding-buffer-dup! would try to do a
+;;  bytevector-copy! beyond the end of sliding-buffer-data.
+
 ;;; Code:
 #!r6rs
 
@@ -117,7 +121,8 @@
                       (%sliding-buffer-drain buffer pos fill)
                       (loop i pos 0 n-left))
                      (else
-                      (let ((count (fxmin (fx- size i) (fx- size fill) n-left)))
+                      (let ((count (fxmin (fx- size i) (fx- size fill) n-left
+                                          (fx- size pos))))
                         (bytevector-copy! data i data pos count)
                         (loop (fxmod (fx+ i count) size)
                               (fxmod (fx+ pos count) size)
