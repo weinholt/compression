@@ -1,6 +1,7 @@
 ;;; sliding-buffer.sls --- A circular buffer attached to a data sink
 
 ;; Copyright (C) 2009 Andreas Rottmann <a.rottmann@gmx.at>
+;; Copyright (C) 2010 Göran Weinholt <goran@weinholt.se>
 
 ;; Author: Andreas Rottmann <a.rottmann@gmx.at>
 
@@ -21,7 +22,9 @@
 
 ;; Modified on 2010-04-17 by Göran Weinholt <goran@weinholt.se>
 ;;  Fixed a bug where sliding-buffer-dup! would try to do a
-;;  bytevector-copy! beyond the end of sliding-buffer-data.
+;;  bytevector-copy! beyond the end of sliding-buffer-data. Also
+;;  implemented sliding-buffer-init! for use by ZLIB's pre-set
+;;  dictionaries.
 
 ;;; Code:
 #!r6rs
@@ -29,6 +32,7 @@
 (library (weinholt compression sliding-buffer)
   (export make-sliding-buffer
           sliding-buffer?
+          sliding-buffer-init!
           sliding-buffer-drain!
           sliding-buffer-read!
           sliding-buffer-put-u8!
@@ -47,6 +51,14 @@
   (define (sliding-buffer-size buffer)
     (bytevector-length (sliding-buffer-data buffer)))
   
+  ;; Copy data into the buffer so that it can be dup!'d. The sink does
+  ;; not receive this data.
+  (define (sliding-buffer-init! buffer bv)
+    (let ((data (sliding-buffer-data buffer))
+          (len (bytevector-length bv)))
+      (bytevector-copy! bv 0 data 0 len)
+      (sliding-buffer-pos-set! buffer len)))
+
   (define (%sliding-buffer-drain buffer pos fill)
     (let ((sink (sliding-buffer-sink buffer))
           (size (sliding-buffer-size buffer))
