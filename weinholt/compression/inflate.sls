@@ -23,12 +23,12 @@
 ;; the tree (they are sort of like Morse codes). LZ77 makes it
 ;; possible to copy parts of the recently decompressed data.
 
-(library (weinholt compression inflate (0 0 20100417))
+(library (weinholt compression inflate (0 0 20100424))
   (export inflate make-inflater)
   (import (rnrs)
           (only (srfi :1 lists) iota)
           (weinholt compression sliding-buffer)
-          (weinholt compression huffman (0 (>= 0))))
+          (weinholt compression huffman (0 (>= 1))))
 
   (define-syntax trace
     (syntax-rules ()
@@ -84,7 +84,7 @@
                    l                       ;zeros don't count
                    (cons (cons (fx- i start) (vector-ref codes i)) l))))
            ((fx<? i start)
-            (canonical-codes->simple-lookup-table
+            (canonical-codes->lookup-table
              (reconstruct-codes < l)))))))
   
   (define static-table2

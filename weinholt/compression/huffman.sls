@@ -18,12 +18,26 @@
 ;; Procedures for David Huffman's codes. These are suitable for use
 ;; with DEFLATE.
 
-(library (weinholt compression huffman (0 0 20100103))
+;; Version (0 1): Added canonical-codes->lookup-table that builds a
+;; two-level lookup table.
+
+(library (weinholt compression huffman (0 1 20100424))
   (export reconstruct-codes
           canonical-codes->simple-lookup-table
+          canonical-codes->lookup-table
           get-next-code)
   (import (except (rnrs) fxreverse-bit-field)
-          (only (srfi :1 lists) iota))
+          #;(only (srfi :13 strings) string-pad)
+          #;(only (srfi :1 lists) iota))
+
+  (define-syntax trace
+    (syntax-rules ()
+      #;
+      ((_ . args)
+       (begin
+         (for-each display (list . args))
+         (newline)))
+      ((_ . args) (begin 'dummy))))
 
   (define (fxreverse-bit-field61 v)
     ;; Based on <http://aggregate.org/MAGIC/#Bit Reversal>.
@@ -95,6 +109,33 @@
                ((fx=? i end)
                 (fxior (fxarithmetic-shift-left ret start)
                        (fxcopy-bit-field v start end 0)))))))
+
+  (define-syntax revtable
+    (lambda (x)
+      (define (rev v start end)
+        (do ((i start (fx+ i 1))
+             (ret 0 (if (fxbit-set? v i)
+                        (fxior ret (fxarithmetic-shift-left 1 (fx- (fx- end i) 1)))
+                        ret)))
+            ((fx=? i end)
+             (fxior (fxarithmetic-shift-left ret start)
+                    (fxcopy-bit-field v start end 0)))))
+      (syntax-case x ()
+        ((table bits)
+         (let* ((bits (syntax->datum #'bits))
+                (len (fxarithmetic-shift-left 1 bits)))
+           (do ((v (make-vector len))
+                (i 0 (+ i 1)))
+               ((= i len)
+                (with-syntax ((t v))
+                  #'(begin 't)))
+             (vector-set! v i (rev i 0 bits))))))))
+
+  (define (reverse-bits i end)
+    (define rev9 (revtable 9))
+    (if (fx<=? end 9)
+        (fxarithmetic-shift-right (vector-ref rev9 i) (fx- 9 end))
+        (fxreverse-bit-field i 0 end)))
 
   ;; If you have a canonical Huffman tree, with a known alphabet, then
   ;; all that is needed to reconstruct the tree is the length of each
@@ -177,8 +218,6 @@
 
   ;; (graph '((#\F #\A . #\B) (#\C . #\D) #\E #\G . #\H))
 
-  ;;(define (print . x) (for-each display x) (newline))
-
   ;; This takes a list of canonical codes ((symbol bit-length code)
   ;; ...) and constructs a lookup table. It's a one-level table (so
   ;; don't use this with a giant code). Let M be the maximum bit
@@ -187,38 +226,96 @@
   ;; an index into the table, and the entry will tell you how many
   ;; bits belong to the symbol, and what the symbol is.
   (define (canonical-codes->simple-lookup-table codes)
-    (define cmp (lambda (x y) (< (caddr x) (caddr y))))
-    ;; (print codes)
     (let ((maxlen (fold-right max 0 (map cadr codes))))
-      ;; (display (list 'maxlen maxlen)) (newline)
       (do ((t (make-vector (fxarithmetic-shift-left 1 maxlen) #f))
-           (codes (list-sort cmp codes) (cdr codes)))
-          ((null? codes) (cons maxlen t))
-        (let* ((code (car codes)) (sym (car code)) (bitlen (cadr code)) (bits (caddr code)))
-          ;; (print "#;sym: " sym "  #;bitlen: "bitlen " #;bits: #b" (number->string bits 2))
+           (codes codes (cdr codes)))
+          ((null? codes)
+           (cons maxlen t))
+        (let* ((code (car codes))
+               (symbol (car code)) (bitlen (cadr code)) (bits (caddr code))
+               (translation (cons bitlen symbol)))
           (let* ((start (fxarithmetic-shift-left bits (- maxlen bitlen)))
-                 (end (fxior start (- (fxarithmetic-shift-left 1 (- maxlen bitlen)) 1)))
-                 (translation (cons (car code) (cadr code)))) ;(symbol . bitlength)
-            ;; (print "#;start: #b" (number->string start 2))
-            ;; (print "#;end: #b" (number->string end 2))
-            (do ((i start (+ i 1)))
-                ((> i end))
-              ;; (print (list 'set! i translation))
+                 (end (fxior start (- (fxarithmetic-shift-left 1 (- maxlen bitlen)) 1))))
+            (do ((i start (fx+ i 1)))
+                ((fx>? i end))
               (vector-set! t (fxreverse-bit-field i 0 maxlen) translation)))))))
 
   ;; (canonical-codes->simple-lookup-table
   ;;  '((#\A 3 2) (#\B 3 3) (#\C 3 4) (#\D 3 5) (#\E 3 6) (#\F 2 0) (#\G 4 14) (#\H 4 15)))
 
+  ;; Uses two tables, as described here: http://www.gzip.org/algorithm.txt
+  (define (canonical-codes->lookup-table codes)
+    (define maxlen
+      ;; Length of the first table. 9 is a sweet spot, but causes
+      ;; trouble because it can consume a byte too much in lookahead
+      ;; (like at the end of a gzip stream).
+      (let lp ((m 1) (codes codes))
+        (if (null? codes)
+            m
+            (let ((bitlen (cadar codes)))
+              (if (fx>=? bitlen 8) 9
+                  (lp (max m bitlen)
+                      (cdr codes)))))))
+    (define (findmax codes prefix)
+      ;; Find the maximum code length for codes where the first
+      ;; `maxlen' bits are equal to the prefix.
+      (let lp ((m 0) (codes codes))
+        (if (null? codes)
+            m
+            (let ((bitlen (cadar codes))
+                  (bits (caddar codes)))
+              (cond ((fx>? maxlen bitlen) (lp m (cdr codes)))
+                    ((fx=? (fxarithmetic-shift-right bits (fx- bitlen maxlen))
+                           prefix)
+                     (lp (max m (fx- bitlen maxlen)) (cdr codes)))
+                    (else (lp m (cdr codes))))))))
+    (define (fill! t bits maxlen bitlen translation)
+      (let* ((start (fxarithmetic-shift-left bits (fx- maxlen bitlen)))
+             (end (fxior start (fx- (fxarithmetic-shift-left 1 (fx- maxlen bitlen)) 1))))
+        (trace "#;start: #b" (string-pad (number->string start 2) bitlen #\0))
+        (trace "#;end:   #b" (string-pad (number->string end 2) bitlen #\0))
+        (do ((i start (fx+ i 1)))
+            ((fx>? i end))
+          (trace `(set! ,i ,translation))
+          (vector-set! t (reverse-bits i maxlen) translation))))
+    (do ((t (make-vector (fxarithmetic-shift-left 1 maxlen) #f))
+         (codes codes (cdr codes)))
+        ((null? codes)
+         (cons maxlen t))
+      (let* ((code (car codes))
+             (symbol (car code)) (bitlen (cadr code)) (bits (caddr code)))
+        (trace "#;symbol: " symbol " #;bitlen: "bitlen " #;bits: #b"
+               (string-pad (number->string bits 2) bitlen #\0))
+        (if (fx<=? bitlen maxlen)
+            (fill! t bits maxlen bitlen (cons bitlen symbol))
+            (let* ((bitlen (fx- bitlen maxlen)) ;bitlength in table 2
+                   (i (fxarithmetic-shift-right bits bitlen))
+                   (ri (reverse-bits i maxlen))
+                   (t2 (cond ((vector-ref t ri) => cdr)
+                             (else ;; make a second-level table
+                              (let* ((maxlen* (findmax codes i))
+                                     (v (make-vector (fxarithmetic-shift-left 1 maxlen*) #f))
+                                     (t2 (cons maxlen* v)))
+                                (trace `(set! ,i table))
+                                (vector-set! t ri (cons maxlen t2))
+                                t2))))
+                   (bits (fxand bits (fx- (fxarithmetic-shift-left 1 bitlen) 1))))
+              (fill! (data t2) bits (len t2) bitlen (cons bitlen symbol)))))))
 
   ;; (flatten-huffman-tree '((1 4 . 3) (5 7 10 . 9) 2 (6 . 11) 8 12 . 13))
 
+  (define len car)
+  (define data cdr)
+
   ;; This lookup code is the companion of the procedure above.
   (define (get-next-code get-bits table)
-    (let ((code (get-bits (car table) 'peek)))
-      (let ((translation (vector-ref (cdr table) code)))
-        ;; (print "code: " (string-pad (number->string code 2) (cdr translation) #\0) " => " (car translation))
-        (get-bits (cdr translation))
-        (car translation))))
+    (let ((code (get-bits (len table) 'peek)))
+      (let ((translation (vector-ref (data table) code)))
+        (trace "code: " (string-pad (number->string code 2) (len translation) #\0) " => " (data translation))
+        (get-bits (len translation))
+        (if (pair? (data translation))
+            (get-next-code get-bits (data translation))
+            (data translation)))))
 
   )
 
