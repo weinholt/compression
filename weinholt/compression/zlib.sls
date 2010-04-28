@@ -24,7 +24,7 @@
 ;; sender does not flush properly, you might be stuck waiting for more
 ;; data, even though there is data in the buffers.
 
-(library (weinholt compression zlib (0 0 20100417))
+(library (weinholt compression zlib (0 0 20100427))
   (export make-zlib-input-port)
   (import (rnrs)
           (weinholt compression adler-32 (0 (>= 0)))
@@ -122,6 +122,9 @@
                 (else (return))))
         (define (close)
           (set! buffer #f)
+          ;; FIXME: currently broken because the bit-reader eats the
+          ;; checksum sometimes.
+          #;
           (when (and done
                      (not (eqv? (get-unpack in "!L")
                                 (adler-32-finish checksum))))

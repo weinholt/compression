@@ -1,0 +1,99 @@
+#!/usr/bin/env scheme-script
+;; -*- mode: scheme; coding: utf-8 -*-
+;; tarinfo - Print information about tarballs
+;; Copyright © 2010 Göran Weinholt <goran@weinholt.se>
+;;
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+;;
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+;;
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#!r6rs
+
+;; Prints assorted facts about tarballs.
+
+(import (rnrs)
+        (srfi :19 time)
+        (weinholt archive tar)
+        (weinholt compression gzip))
+
+(define (print . x) (for-each display x) (newline))
+
+(define (pad-left s len c)
+  (let ((s (if (number? s) (number->string s) s)))
+    (if (< (string-length s) len)
+        (string-append s (make-string (- len (string-length s)) c))
+        s)))
+
+(define (pad-right s len c)
+  (let ((s (if (number? s) (number->string s) s)))
+    (if (< (string-length s) len)
+        (string-append (make-string (- len (string-length s)) c) s)
+        s)))
+
+(define (format-mode mode)
+  (number->string mode 8))
+
+(define (open-tarball fn)
+  (print "Listing information about `" fn "'")
+  (let ((p (open-file-input-port fn)))
+    (cond ((is-gzip-file? p)
+           (print "Looks like a gzip'd tarball.")
+           (let-values (((text? date extra fname fcomment xfl os)
+                         (get-gzip-header p)))
+             (print "GZIP created on " (if date (date->string date "~1 ~2") "n/a"))
+             (when text? (print "Compressor believed this tarball to be text."))
+             (unless (equal? #vu8() extra) (print "Extra data: " extra))
+             (when fname (print "Original filename: `" fname "'"))
+             (when fcomment (print "File comment: " fcomment))
+             (print "GZIP compressor used the " xfl " algorithm")
+             (print "Created on operating system type #" os)
+
+             (set-port-position! p 0))
+           (newline)
+           (make-gzip-input-port p "gzip input" 'close-underlying-port))
+          (else
+           (print "Guessing that this is an uncompressed tarball.\n")
+           p))))
+
+(unless (= (length (command-line)) 2)
+  (display "Usage: tarinfo <filename>\n" (current-error-port))
+  (exit 1))
+
+(call-with-port (open-tarball (cadr (command-line)))
+  (lambda (p)
+    (print (pad-right "Mode" 7 #\space) " "
+           (pad-right "UID" 4 #\space) "/"
+           (pad-left "GID" 4 #\space) " "
+           (pad-right "File size" 10 #\space) " "
+           (pad-left "Modified" 24 #\space) "  "
+           "Filename")
+    (let lp ()
+      (let ((rec (get-header-record p)))
+        (unless (eof-object? rec)
+          (print (pad-right (format-mode (header-mode rec)) 7 #\space) " "
+                 (pad-right (header-uid rec) 4 #\space) "/"
+                 (pad-left (header-gid rec) 4 #\space) " "
+                 (pad-right (header-size rec) 10 #\space) " "
+                 (date->string (header-mtime rec) "~1 ~2") "  "
+                 (header-name rec))
+          (let ((uname (header-uname rec))
+                (gname (header-gname rec)))
+            (unless (and (string=? gname "") (string=? uname ""))
+              (print (pad-right uname 12 #\space) "/" gname)))
+          (let ((t (header-typeflag rec)))
+            (case t
+              ((regular) 'thats-fine...)
+              ((directory) (print "\tDirectory"))
+              ((symlink) (print "\tSymlink to " (header-linkname rec)))
+              (else (print "\tType: " t))))
+
+          (skip-file p rec)
+          (lp))))))

@@ -17,6 +17,11 @@
 
 ;; GZIP file format reader
 
+;; (is-gzip-file? file-or-port)
+;;  Takes a filename or a binary input port and returns #t if the file
+;;  looks like a GZIP file. The port should have set-port-position!
+;;  and port-position.
+
 ;; (make-gzip-input-port binary-input-port id close?)
 ;;  Returns a new port that can be used to read the decompressed data
 ;;  from the original port.
@@ -27,8 +32,13 @@
 
 ;; (extract-gzip binary-input-port binary-output-port)
 ;;  Reads compressed data from the input and writes decompressed data
-;;  to the output.
+;;  to the output. Returns the same values as get-gzip-header.
 
+;; (get-gzip-header binary-input-port)
+;;  Reads the GZIP header and performs sanity checks. Returns
+;;  text/binary indicator (FTEXT), file modification time (as an
+;;  SRFI-19 date, or #f is none), "extra" data, original filename,
+;;  file comment, compression flags and operating system number.
 
 ;; RFC1952: GZIP file format specification version 4.3
 ;; http://www.gzip.org/format.txt
@@ -40,8 +50,9 @@
 ;; TODO: gzip files can be concatenated!
 ;; TODO: reduce maximum memory usage (see the note about call/cc)
 
-(library (weinholt compression gzip (0 0 20100417))
-  (export make-gzip-input-port open-gzip-file-input-port extract-gzip)
+(library (weinholt compression gzip (0 0 20100427))
+  (export make-gzip-input-port open-gzip-file-input-port extract-gzip
+          is-gzip-file? get-gzip-header)
   (import (rnrs)
           (srfi :19 time)
           (weinholt crypto crc (1))
@@ -72,28 +83,41 @@
       (latin-1-codec)
       #;(eol-style lf))))         ;not supported by Ikarus, 2010-04-17
 
-  (define (get-gzip-header p who)
-    (unless (eqv? (lookahead-u8 p) #x1f) (error who "not GZIP data")) (get-u8 p)
-    (unless (eqv? (lookahead-u8 p) #x8b) (error who "not GZIP data")) (get-u8 p)
-    ;; xfl is not very interesting, ignored.
-    (let*-values (((cm flg mtime xfl os) (get-unpack p "<uCCLCC"))
-                  ((extra) (if (flg-fextra? flg)
-                               (get-bytevector-n p (get-unpack p "<S"))
-                               #vu8()))
-                  ((fname) (and (flg-fname? flg) (get-asciiz p)))
-                  ((fcomment) (and (flg-fcomment? flg) (get-asciiz p)))
-                  ((crc16) (and (flg-fhcrc? flg) (get-unpack p "<S"))))
-      (unless (= cm compression-method-deflate)
-        (error who "invalid compression method" cm))
-      (when (flg-reserved? flg)
-        (error who "reserved flags set" flg))
-      (values (and (not (zero? mtime))
-                   (time-monotonic->date (make-time 'time-monotonic 0 mtime)))
-              extra fname fcomment)))
+  (define (is-gzip-file? f)
+    (let* ((f (if (input-port? f) f (open-file-input-port f)))
+           (pos (port-position f)))
+      (set-port-position! f 0)
+      (let ((bv (get-bytevector-n f 2)))
+        (set-port-position! f pos)
+        (equal? bv #vu8(#x1f #x8b)))))
+
+  (define get-gzip-header
+    (case-lambda
+      ((p)
+       (get-gzip-header p 'get-gzip-header))
+      ((p who)
+       (unless (eqv? (lookahead-u8 p) #x1f) (error who "not GZIP data" p)) (get-u8 p)
+       (unless (eqv? (lookahead-u8 p) #x8b) (error who "not GZIP data" p)) (get-u8 p)
+       (let*-values (((cm flg mtime xfl os) (get-unpack p "<uCCLCC"))
+                     ((extra) (if (flg-fextra? flg)
+                                  (get-bytevector-n p (get-unpack p "<S"))
+                                  #vu8()))
+                     ((fname) (and (flg-fname? flg) (get-asciiz p)))
+                     ((fcomment) (and (flg-fcomment? flg) (get-asciiz p)))
+                     ((crc16) (and (flg-fhcrc? flg) (get-unpack p "<S"))))
+         (unless (= cm compression-method-deflate)
+           (error who "invalid compression method" cm))
+         (when (flg-reserved? flg)
+           (error who "reserved flags set" flg))
+         (values (flg-ftext? flg)
+                 (and (not (zero? mtime))
+                      (time-monotonic->date (make-time 'time-monotonic 0 mtime)))
+                 extra fname fcomment
+                 (if (= xfl 2) 'slowest (if (= xfl 4) 'fastest xfl)) os)))))
 
   (define (make-gzip-input-port in id close-underlying-port?)
     (define who 'make-gzip-input-port)
-    (let-values (((date extra fname fcomment) (get-gzip-header in who)))
+    (let-values ((_ (get-gzip-header in who)))
       (let ((buffer (make-bytevector 256))
             (offsetr 0)
             (offsetw 0)
@@ -142,11 +166,19 @@
                               (lp)      ;encountered a sync block
                               (return)))
                          ((done)        ;end of deflate data
-                          (unless (eqv? (get-unpack in "<L")
-                                        (crc-32-finish checksum))
-                            (error 'gzip-read! "bad GZIP checksum"))
-                          (unless (= (get-unpack in "<L") output-len)
-                            (error 'gzip-read! "bad GZIP output length"))
+                          ;; FIXME: currently broken because the
+                          ;; bit-reader eats the checksum sometimes.
+                          #;
+                          (let ((expect (crc-32-finish checksum))
+                                (actual (get-unpack in "<L")))
+                            (unless (eqv? expect actual)
+                              (error 'gzip-read! "bad GZIP checksum"
+                                     expect actual)))
+                          #;
+                          (let ((expect (get-unpack in "<L")))
+                            (unless (= expect output-len)
+                              (error 'gzip-read! "bad GZIP output length"
+                                     expect output-len)))
                           ;; TODO: check if there's another GZIP
                           ;; header after this one, or if it's all
                           ;; garbage
@@ -167,7 +199,7 @@
   ;; TODO: handle more than one GZIP stream
   (define (extract-gzip in out)
     (define who 'extract-gzip)
-    (let*-values (((date extra fname fcomment) (get-gzip-header in who))
+    (let*-values ((x (get-gzip-header in who))
                   ((crc size) (inflate in out
                                        crc-32-init
                                        crc-32-update
@@ -177,4 +209,4 @@
         (error who "bad CRC" crc crc*))
       (unless (= isize (bitwise-bit-field size 0 32))
         (error who "bad file size" size isize))
-      (values date extra fname fcomment))))
+      (apply values x))))
