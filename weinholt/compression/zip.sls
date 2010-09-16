@@ -22,7 +22,7 @@
 ;; Future work: zip64, split files, encryption, various compression
 ;; algorithms.
 
-(library (weinholt compression zip (0 0 20100415))
+(library (weinholt compression zip (0 0 20100916))
   (export supported-compression-method?
           compression-stored
           compression-shrunk
@@ -191,7 +191,7 @@
                     filename-length extra-length)
                    (get-unpack port "<uSSSSSLLLSS"))
                   ((filename) (utf8->string (get-bytevector-n port filename-length)))
-                  ((extra) (get-bytevector-n port extra-length))
+                  ((extra) (parse-extra-field (get-bytevector-n port extra-length)))
                   ((pos) (port-position port)))
       (when (bad-filename? filename)
         (error 'get-file-record "Bad filename" filename))
@@ -426,10 +426,12 @@
                    date local-extra central-extra os-made-by
                    internal-attributes external-attributes)
                   (get-file-attributes filename)))
-      (append-port out (open-file-input-port filename)
-                   inzip-filename
-                   date local-extra central-extra os-made-by
-                   internal-attributes external-attributes)))
+      (call-with-port (open-file-input-port filename)
+        (lambda (p)
+          (append-port out p
+                       inzip-filename
+                       date local-extra central-extra os-made-by
+                       internal-attributes external-attributes)))))
 
   ;; Like append-file, except it takes a binary input port instead of
   ;; a file name, and you specify the attributes.
@@ -457,7 +459,6 @@
                  (let ((read (get-bytevector-n! in buf 0 bufsize)))
                    (cond ((eof-object? read)
                           (let ((crc (crc-32-finish crc)))
-                            (close-port in)
                             (set-port-position! out frpos)
                             (put-zip-record out (make-file-record
                                                  version-1.0 0
