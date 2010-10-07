@@ -21,14 +21,15 @@
 ;; Version (0 1): Added canonical-codes->lookup-table that builds a
 ;; two-level lookup table.
 
-(library (weinholt compression huffman (0 1 20100424))
+(library (weinholt compression huffman (0 1 20101006))
   (export reconstruct-codes
           canonical-codes->simple-lookup-table
           canonical-codes->lookup-table
           get-next-code)
   (import (except (rnrs) fxreverse-bit-field)
           #;(only (srfi :13 strings) string-pad)
-          #;(only (srfi :1 lists) iota))
+          #;(only (srfi :1 lists) iota)
+          (weinholt compression bitstream (1)))
 
   (define-syntax trace
     (syntax-rules ()
@@ -308,13 +309,13 @@
   (define data cdr)
 
   ;; This lookup code is the companion of the procedure above.
-  (define (get-next-code get-bits table)
-    (let ((code (get-bits (len table) 'peek)))
+  (define (get-next-code br table)
+    (let ((code (lookahead-bits br (len table))))
       (let ((translation (vector-ref (data table) code)))
         (trace "code: " (string-pad (number->string code 2) (len translation) #\0) " => " (data translation))
-        (get-bits (len translation))
+        (get-bits br (len translation))
         (if (pair? (data translation))
-            (get-next-code get-bits (data translation))
+            (get-next-code br (data translation))
             (data translation)))))
 
   )

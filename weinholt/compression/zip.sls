@@ -22,7 +22,7 @@
 ;; Future work: zip64, split files, encryption, various compression
 ;; algorithms.
 
-(library (weinholt compression zip (0 0 20100916))
+(library (weinholt compression zip (0 0 20101007))
   (export supported-compression-method?
           compression-stored
           compression-shrunk
@@ -92,7 +92,7 @@
           (srfi :19 time)
           (weinholt struct pack (1 (>= 3)))
           (weinholt crypto crc (1 (>= 0)))
-          (weinholt compression inflate (0 (>= 0)))
+          (weinholt compression inflate (1))
           (weinholt compression zip extra (0 (>= 0))))
 
   (define-crc crc-32)
@@ -377,8 +377,8 @@
                   (- n read)))))))
 
   (define (extract-deflated-data in out n)
-    (let-values (((crc len) (inflate in out crc-32-init
-                                     crc-32-update crc-32-finish)))
+    (let-values (((crc len . _) (inflate in out crc-32-init
+                                         crc-32-update crc-32-finish)))
       (unless (= len n)
         (error 'extract-deflated-data
                "the decompressed data is not the right size"

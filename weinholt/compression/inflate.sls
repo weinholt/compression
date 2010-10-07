@@ -23,12 +23,13 @@
 ;; the tree (they are sort of like Morse codes). LZ77 makes it
 ;; possible to copy parts of the recently decompressed data.
 
-(library (weinholt compression inflate (0 0 20100424))
+(library (weinholt compression inflate (1 0 20101007))
   (export inflate make-inflater)
   (import (rnrs)
           (only (srfi :1 lists) iota)
-          (weinholt compression sliding-buffer)
-          (weinholt compression huffman (0 (>= 1))))
+          (weinholt compression bitstream (1))
+          (weinholt compression huffman (0 (>= 1)))
+          (weinholt compression sliding-buffer))
 
   (define-syntax trace
     (syntax-rules ()
@@ -38,40 +39,6 @@
          (for-each display (list . args))
          (newline)))
       ((_ . args) (begin 'dummy))))
-
-  (define (make-bit-reader port)
-    ;; This is a little tricky. The compressed data is not
-    ;; byte-aligned, so there needs to be a way to read N bits from
-    ;; the input. To make the Huffman table lookup fast, we need to
-    ;; read as many bits as are needed to do a table lookup. After the
-    ;; lookup we know how many bits were used. But non-compressed
-    ;; blocks *are* byte-aligned, so there's a procedure to discard as
-    ;; many bits as are necessary to get the "buffer" byte-aligned.
-    ;; Luckily the non-compressed data starts with two u16's, so we
-    ;; don't have to mess around with lookahead-u8 here.
-    (let ((buf 0) (buflen 0) (alignment 0))
-      (define (fill count)
-        (when (fx<? buflen count)          ;read more?
-          (set! buf (fxior (fxarithmetic-shift-left (get-u8 port) buflen)
-                           buf))
-          (set! buflen (fx+ buflen 8))
-          (fill count)))
-      (define (read count)
-        (let ((v (fxbit-field buf 0 count)))
-          (set! buf (fxarithmetic-shift-right buf count))
-          (set! buflen (fx- buflen count))
-          (set! alignment (fxand #x7 (fx+ alignment count)))
-          v))
-      (case-lambda
-        ((count _)                      ;peek
-         (fill count)
-         (fxbit-field buf 0 count))
-        ((count)                        ;read `count' bits
-         (fill count)
-         (read count))
-        (()                             ;seek to next byte boundary
-         (unless (fxzero? alignment)
-           (read (fx- 8 alignment)))))))
 
   (define vector->huffman-lookup-table
     (case-lambda
@@ -112,19 +79,19 @@
     '#(1 2 3 4 5 7 9 13 17 25 33 49 65 97 129 193 257 385 513 769 1025 1537
          2049 3073 4097 6145 8193 12289 16385 24577))
 
-  (define (inflate-cblock buffer get-bits table2 table3)
+  (define (inflate-cblock buffer br table2 table3)
     (let lp ()
-      (let ((code (get-next-code get-bits table2)))
+      (let ((code (get-next-code br table2)))
         (cond ((< code 256)         ;literal byte
                (trace "LITERAL:" code)
                (sliding-buffer-put-u8! buffer code)
                (lp))
               ((<= 257 code 285)
                (trace "\nlen code: " code)
-               (let* ((len (+ (get-bits (vector-ref len-extra (- code 257)))
+               (let* ((len (+ (get-bits br (vector-ref len-extra (- code 257)))
                               (vector-ref len-base (- code 257))))
-                      (distcode (get-next-code get-bits table3))
-                      (dist (+ (get-bits (vector-ref dist-extra distcode))
+                      (distcode (get-next-code br table3))
+                      (dist (+ (get-bits br (vector-ref dist-extra distcode))
                                (vector-ref dist-base distcode))))
                  (trace "len: " len "  dist: " dist)
                  (trace "COPYING FROM POSITION: " dist  " THIS MUCH: " len)
@@ -134,12 +101,12 @@
               (else
                (error 'inflate "error in compressed data (bad literal/length)"))))))
 
-  (define (inflate-block in buffer get-bits)
-    (case (get-bits 2)                  ;block-type
+  (define (inflate-block in buffer br)
+    (case (get-bits br 2)               ;block-type
       ((#b00)                           ;non-compressed block
-       (get-bits)                       ;seek to a byte boundary
-       (let* ((len (get-bits 16))
-              (nlen (get-bits 16)))
+       (align-bit-reader br)            ;seek to a byte boundary
+       (let* ((len (get-bits br 16))
+              (nlen (get-bits br 16)))
          (trace "non-compressed block: " len)
          (unless (fx=? len (fxand #xffff (fxnot nlen)))
            (error 'inflate "error in non-compressed block length" len nlen))
@@ -147,12 +114,12 @@
            (error 'inflate "premature EOF encountered"))))
       ((#b01)                           ;static Huffman tree
        (trace "block with static Huffman tree")
-       (inflate-cblock buffer get-bits static-table2 static-table3))
+       (inflate-cblock buffer br static-table2 static-table3))
       ((#b10)                           ;dynamic Huffman tree
        (trace "block with dynamic Huffman tree")
-       (let* ((hlit (fx+ 257 (get-bits 5)))
-              (hdist (fx+ 1 (get-bits 5)))
-              (hclen (fx+ 4 (get-bits 4))))
+       (let* ((hlit (fx+ 257 (get-bits br 5)))
+              (hdist (fx+ 1 (get-bits br 5)))
+              (hclen (fx+ 4 (get-bits br 4))))
          (when (or (fx>? hlit 286) (fx>? hclen 19))
            (error 'inflate "bad number of literal/length codes" hlit hclen))
          ;; Up to 19 code lengths are now read...
@@ -165,33 +132,33 @@
                      ;; Huffman table.
                      (vector->huffman-lookup-table codes))
                   (vector-set! codes (vector-ref order i)
-                               (get-bits 3)))))
+                               (get-bits br 3)))))
            ;; Table 1 is now used to encode the `code-lengths'
            ;; canonical Huffman table.
            (let* ((hlen (fx+ hlit hdist))
                   (code-lengths (make-vector hlen 0)))
              (let lp ((n 0))
                (unless (fx=? n hlen)
-                 (let ((blc (get-next-code get-bits table1)))
+                 (let ((blc (get-next-code br table1)))
                    (cond
                      ((fx<? blc 16)     ;literal code
                       (vector-set! code-lengths n blc)
                       (lp (fx+ n 1)))
                      ((fx=? blc 16)     ;copy previous code
-                      (do ((rep (fx+ 3 (get-bits 2)))
+                      (do ((rep (fx+ 3 (get-bits br 2)))
                            (prev (vector-ref code-lengths (fx- n 1)))
                            (i 0 (fx+ i 1)))
                           ((fx=? i rep) (lp (fx+ n rep)))
                         (vector-set! code-lengths (fx+ n i) prev)))
                      ((fx=? blc 17)     ;fill with zeros
-                      (lp (fx+ n (fx+ 3 (get-bits 3)))))
+                      (lp (fx+ n (fx+ 3 (get-bits br 3)))))
                      (else              ;fill with zeros (= blc 18)
-                      (lp (fx+ n (fx+ 11 (get-bits 7)))))))))
+                      (lp (fx+ n (fx+ 11 (get-bits br 7)))))))))
              ;; Table 2 is for lengths, literals and the
              ;; end-of-block. Table 3 is for distance codes.
              (let ((table2 (vector->huffman-lookup-table code-lengths 0 hlit))
                    (table3 (vector->huffman-lookup-table code-lengths hlit hlen)))
-               (inflate-cblock buffer get-bits table2 table3))))))
+               (inflate-cblock buffer br table2 table3))))))
       ((#b11)
        (error 'inflate "error in compressed data (bad block type)"))))
 
@@ -206,14 +173,16 @@
                       (set! crc (crc-update crc bytevector start (+ start count)))
                       (set! output-len (+ output-len count)))
                     (* 32 1024)))
-           (get-bits (make-bit-reader in)))
+           (br (make-bit-reader in)))
       (let lp ()
-        (let ((last-block (fx=? (get-bits 1) 1)))
-          (inflate-block in buffer get-bits)
+        (let ((last-block (fx=? (get-bits br 1) 1)))
+          (inflate-block in buffer br)
           (cond (last-block
                  (sliding-buffer-drain! buffer)
+                 (align-bit-reader br)
                  (values (crc-finish crc)
-                         output-len))
+                         output-len
+                         (get-bit-reader-buffer br)))
                 (else
                  (lp)))))))
 
@@ -222,11 +191,20 @@
   ;; into the sliding buffer, but is not copied to the output.
   (define (make-inflater in sink window-size dictionary)
     (let ((buffer (make-sliding-buffer sink window-size))
-          (get-bits (make-bit-reader in)))
+          (br (make-bit-reader in)))
       (when dictionary
         (sliding-buffer-init! buffer dictionary))
-      (lambda ()
-        (let ((last-block (fx=? (get-bits 1) 1)))
-          (inflate-block in buffer get-bits)
-          (sliding-buffer-drain! buffer)
-          (if last-block 'done 'more))))))
+      (case-lambda
+        (()
+         (let ((last-block (fx=? (get-bits br 1) 1)))
+           (inflate-block in buffer br)
+           (sliding-buffer-drain! buffer)
+           (if last-block 'done 'more)))
+        ((x)
+         (case x
+           ((get-buffer)
+            ;; Inflate needs a little lookahead sometimes, so a byte
+            ;; or two might be read that does not belong to the
+            ;; deflate stream. This retreives those bytes.
+            (align-bit-reader br)
+            (get-bit-reader-buffer br))))))))

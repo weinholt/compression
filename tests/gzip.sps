@@ -18,8 +18,9 @@
 
 (import (rnrs)
         (srfi :78 lightweight-testing)
+        (weinholt bytevectors)
         (weinholt compression adler-32)
-        (weinholt compression gzip (0)))
+        (weinholt compression gzip (1)))
 
 (define (gunzip bv)
   (call-with-port (make-gzip-input-port (open-bytevector-input-port bv)
@@ -60,5 +61,38 @@
 (check (gunzip* dev/null)
        =>
        #vu8())
+
+;; test concatenating gzip members
+
+(define ABC
+  #vu8(31 139 8 0 252 162 173 76 2 3 115 116 114 6 0 72 3 131 163 3 0 0 0))
+
+(check (utf8->string (gunzip (bytevector-append ABC ABC)))
+       =>
+       "ABCABC")
+
+(check (utf8->string (gunzip (bytevector-append ABC ABC ABC)))
+       =>
+       "ABCABCABC")
+
+(check (utf8->string (gunzip (bytevector-append ABC ABC
+                                                (string->utf8 "garbage"))))
+       =>
+       "ABCABC")
+
+;; tests concatenation with extract-gzip instead of the custom port
+
+(check (utf8->string (gunzip* (bytevector-append ABC ABC)))
+       =>
+       "ABCABC")
+
+(check (utf8->string (gunzip* (bytevector-append ABC ABC ABC)))
+       =>
+       "ABCABCABC")
+
+(check (utf8->string (gunzip* (bytevector-append ABC ABC
+                                                 (string->utf8 "garbage"))))
+       =>
+       "ABCABC")
 
 (check-report)
