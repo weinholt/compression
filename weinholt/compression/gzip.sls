@@ -26,7 +26,7 @@
 
 ;; TODO: reduce maximum memory usage (see the note about call/cc)
 
-(library (weinholt compression gzip (1 0 20101007))
+(library (weinholt compression gzip (1 0 20101117))
   (export make-gzip-input-port open-gzip-file-input-port extract-gzip
           is-gzip-file? get-gzip-header
           gzip-text? gzip-mtime gzip-extra-data gzip-filename gzip-comment
@@ -55,17 +55,13 @@
   (define gzip-magic #vu8(#x1f #x8b))
   
   (define (get-asciiz p)
-    (bytevector->string
-     (call-with-bytevector-output-port
-       (lambda (r)
-         (let lp ()
-           (let ((b (get-u8 p)))
-             (unless (fxzero? b)
-               (put-u8 r b)
-               (lp))))))
-     (make-transcoder
-      (latin-1-codec)
-      #;(eol-style lf))))         ;not supported by Ikarus, 2010-04-17
+    (call-with-string-output-port
+      (lambda (r)
+        (let lp ()
+          (let ((b (get-u8 p)))
+            (unless (fxzero? b)
+              (put-char r (integer->char b))
+              (lp)))))))
 
   (define (is-gzip-file? f)
     (let* ((f (if (input-port? f) f (open-file-input-port f)))
