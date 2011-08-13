@@ -1,6 +1,6 @@
 #!/usr/bin/env scheme-script
 ;; -*- mode: scheme; coding: utf-8 -*- !#
-;; Copyright © 2009, 2010 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2009, 2010, 2011 Göran Weinholt <goran@weinholt.se>
 ;;
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -35,6 +35,7 @@
   (check (get-next-code br table) => 7) ;   --""--      12
   (check (get-next-code br table) => 7)
   (check (get-next-code br table) => 8)
-  (check (get-next-code br table) => 7))
+  (check (get-next-code br table) => 7)
+  #f)
 
 (check-report)
