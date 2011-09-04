@@ -1,7 +1,7 @@
 ;;; sliding-buffer.sls --- A circular buffer attached to a data sink
 
 ;; Copyright (C) 2009 Andreas Rottmann <a.rottmann@gmx.at>
-;; Copyright (C) 2010 Göran Weinholt <goran@weinholt.se>
+;; Copyright (C) 2010, 2011 Göran Weinholt <goran@weinholt.se>
 
 ;; Author: Andreas Rottmann <a.rottmann@gmx.at>
 
@@ -26,6 +26,10 @@
 ;;  implemented sliding-buffer-init! for use by ZLIB's pre-set
 ;;  dictionaries.
 
+;; Modified on 2011-09-04 by Göran Weinholt <goran@weinholt.se>
+;;  Added the sliding-buffer-lookback-u8 procedure, which returns
+;;  the byte located a distance away from the current position.
+
 ;;; Code:
 #!r6rs
 
@@ -36,6 +40,7 @@
           sliding-buffer-drain!
           sliding-buffer-read!
           sliding-buffer-put-u8!
+          sliding-buffer-lookback-u8
           sliding-buffer-dup!)
   (import (rnrs))
 
@@ -113,6 +118,13 @@
         (bytevector-u8-set! (sliding-buffer-data buffer) pos u8)
         (sliding-buffer-pos-set! buffer (fxmod (fx+ pos 1) size))
         (sliding-buffer-fill-set! buffer (fx+ (sliding-buffer-fill buffer) 1)))))
+
+  (define (sliding-buffer-lookback-u8 buffer distance)
+    (let ((size (sliding-buffer-size buffer))
+          (fill (sliding-buffer-fill buffer)))
+      (let ((pos (fxmod (fx- (sliding-buffer-pos buffer) distance) size))
+            (data (sliding-buffer-data buffer)))
+        (bytevector-u8-ref (sliding-buffer-data buffer) pos))))
 
   (define (sliding-buffer-dup! buffer distance len)
     (let ((size (sliding-buffer-size buffer))
