@@ -1,7 +1,7 @@
 #!/usr/bin/env scheme-script
 ;; -*- mode: scheme; coding: utf-8 -*- !#
 ;; tarinfo - Print information about tarballs
-;; Copyright © 2010 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2010, 2011 Göran Weinholt <goran@weinholt.se>
 ;;
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -22,7 +22,8 @@
 (import (rnrs)
         (srfi :19 time)
         (weinholt archive tar)
-        (weinholt compression gzip (1)))
+        (weinholt compression gzip (1))
+        (weinholt compression xz (1)))
 
 (define (print . x) (for-each display x) (newline))
 
@@ -63,6 +64,9 @@
              (set-port-position! p 0))
            (newline)
            (make-gzip-input-port p "gzip input" 'close-underlying-port))
+          ((is-xz-file? p)
+           (print "Detected an xz compressed tarball.")
+           (make-xz-input-port p "xz input" 'close-underlying-port))
           (else
            (print "Guessing that this is an uncompressed tarball.\n")
            p))))
