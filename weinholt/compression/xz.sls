@@ -19,7 +19,7 @@
 
 ;; http://tukaani.org/xz/format.html
 
-(library (weinholt compression xz (1 0 20110904))
+(library (weinholt compression xz (1 0 20111014))
   (export make-xz-input-port open-xz-file-input-port #;extract-xz
           is-xz-file?)
   (import (rnrs)
@@ -38,7 +38,6 @@
       ((_ . args) (begin 'dummy))))
 
   (define-crc crc-32)                   ;for headers etc
-  (define-crc crc-64/ecma-182)          ;for streams
 
   (define xz-magic #vu8(#xFD #x37 #x7A #x58 #x5A #x00))
 
@@ -57,6 +56,35 @@
   (define xz-filter-bcj-sparc #x09)
 
   (define xz-filter-lzma2 #x21)
+
+  (define (checksum-procedures algorithm)
+    ;; Takes a name and returns init, update and finish.
+    (case algorithm
+      ((crc-32)
+       (values crc-32-init
+               crc-32-update
+               (lambda (checksum)
+                 (pack "<L" (crc-32-finish checksum)))))
+      ((crc-64/ecma-182)
+       (let ()
+         (define-crc crc-64/ecma-182)
+         (values crc-64/ecma-182-init
+                 crc-64/ecma-182-update
+                 (lambda (checksum)
+                   (pack "<Q" (crc-64/ecma-182-finish checksum))))))
+      ((sha-256)
+       (values make-sha-256
+               (lambda (checksum bv start end)
+                 (sha-256-update! checksum bv start end)
+                 checksum)
+               (lambda (checksum)
+                 (sha-256-finish! checksum)
+                 (sha-256->bytevector checksum))))
+      (else
+       ;; Unknown or "none" algorithm.
+       (values (lambda () #f)
+               (lambda x #f)
+               (lambda x #f)))))
 
   (define (is-xz-file? f)
     (let* ((f (if (input-port? f) f (open-file-input-port f)))
@@ -203,12 +231,14 @@
     ;; streams. TODO: the conditions here should probably be I/O
     ;; related.
     (define who 'make-xz-input-port)
-    (let*-values (((check-length check-algorithm) (get-stream-header in)))
+    (let*-values (((check-length check-algorithm) (get-stream-header in))
+                  ((check-init check-update! check-finish!)
+                   (checksum-procedures check-algorithm)))
       (trace "XZ check algorithm: " check-algorithm)
       (let ((buffer (make-bytevector (expt 2 15))) ;block buffer
             (buf-r 0)
             (buf-w 0))
-        (define checksum (crc-64/ecma-182-init))
+        (define checksum (check-init))
         (define block-start #f)
         (define lzma2-dictsize)
         (define lzma2-state #f)
@@ -222,9 +252,8 @@
 
         (define (sink bv start count)
           ;; TODO: support for additional filters.
-          ;; TODO: compute the checksum (see get-stream-header)
           ;; The sink is only called when there's no data in the buffer.
-          ;; (set! checksum (crc-64/ecma-182-update checksum bv start (+ start count)))
+          (set! checksum (check-update! checksum bv start (+ start count)))
           (grow! count)
           (bytevector-copy! bv start buffer buf-w count)
           (set! buf-w (+ buf-w count)))
@@ -261,10 +290,12 @@
               (set! block-start #f)
               (unless (equal? padding (make-bytevector n 0))
                 (error who "Invalid block padding" padding))
-              (let ((check (get-bytevector-n in check-length)))
-                ;; TODO: (compute and) verify the checksum
-                (trace "LZMA2 block checksum: " check " <-> "
-                       (pack "<Q" (crc-64/ecma-182-finish checksum)))))))
+              (let ((want (get-bytevector-n in check-length))
+                    (have (check-finish! checksum)))
+                (trace "LZMA2 block checksum: " want " <-> " have)
+                (when (and have (not (equal? want have)))
+                  (error who "There has been an LZMA2 block checksum mismatch."
+                         want have))))))
 
         (define (read! bytevector start count)
           ;; Read up to `count' bytes from the source, write them to
@@ -296,12 +327,13 @@
 
         (define (close)
           (trace "XZ input port closed")
-          ;; TODO:
-          (let lp ()
-            (set! buf-r 0)
-            (set! buf-w 0)
-            (unless (zero? (read! buffer 0 (bytevector-length buffer)))
-              (lp)))
+          (when checksum
+            ;; Read to the end of the input so that the checksum is verified.
+            (let lp ()
+              (set! buf-r 0)
+              (set! buf-w 0)
+              (unless (zero? (read! buffer 0 (bytevector-length buffer)))
+                (lp))))
           (set! buffer #f)
           (when close-underlying-port? (close-port in))
           (set! in #f))
