@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2010 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2010, 2012 Göran Weinholt <goran@weinholt.se>
 ;;
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -48,7 +48,7 @@
       
 ;; http://www.gnu.org/software/tar/manual/html_section/Formats.html
 
-(library (weinholt archive tar (0 0 20100428))
+(library (weinholt archive tar (0 0 20120605))
   (export get-header-record
           header-name header-mode header-uid header-gid
           header-size header-mtime header-chksum
@@ -61,8 +61,7 @@
           extract-to-port skip-file)
   (import (rnrs)
           (only (srfi :13 strings) string-trim-both)
-          (only (srfi :19 time) time-monotonic->date make-time)
-          (weinholt bytevectors))
+          (only (srfi :19 time) time-monotonic->date make-time))
 
   (define-syntax trace
     (syntax-rules ()
@@ -177,7 +176,7 @@
            (let ((r (get-bytevector-n! tarport buf 0 512)))
              (trace "read block: " r " (last)")
              (unless (eqv? r 512) (premature-eof who tarport))
-             (put-bytevector destport (subbytevector buf 0 trail))))
+             (put-bytevector destport buf 0 trail)))
         (let ((r (get-bytevector-n! tarport buf 0 512)))
           (unless (eqv? r 512) (premature-eof who tarport))
           (trace "read block: " r)
