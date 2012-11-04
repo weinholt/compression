@@ -27,8 +27,8 @@
 (import (rnrs)
         (srfi :19 time)
         (weinholt archive tar)
-        (weinholt compression gzip (1))
-        (weinholt compression xz (1)))
+        (weinholt compression gzip)
+        (weinholt compression xz))
 
 (define (print . x) (for-each display x) (newline))
 
