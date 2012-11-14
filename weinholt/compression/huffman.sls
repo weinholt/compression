@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2009, 2010 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2009, 2010, 2012 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 ;; Version (0 1): Added canonical-codes->lookup-table that builds a
 ;; two-level lookup table.
 
-(library (weinholt compression huffman (0 1 20120818))
+(library (weinholt compression huffman)
   (export reconstruct-codes
           canonical-codes->simple-lookup-table
           canonical-codes->lookup-table

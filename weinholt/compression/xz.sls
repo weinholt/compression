@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2011 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2011, 2012 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -24,7 +24,7 @@
 
 ;; http://tukaani.org/xz/format.html
 
-(library (weinholt compression xz (1 0 20120818))
+(library (weinholt compression xz)
   (export make-xz-input-port open-xz-file-input-port #;extract-xz
           is-xz-file?)
   (import (rnrs)

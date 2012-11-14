@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2010 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2010, 2012 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -22,7 +22,7 @@
 
 ;; Read bits from binary input ports.
 
-(library (weinholt compression bitstream (1 0 20120818))
+(library (weinholt compression bitstream)
   (export make-bit-reader
           get-bits lookahead-bits align-bit-reader
           get-bit-reader-buffer)

@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2010 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2010, 2012 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -38,7 +38,7 @@
 ;; (adler-32-self-test)
 ;;     returns 'sucess, 'failure, or 'no-self-test
 
-(library (weinholt compression adler-32 (0 0 20120818))
+(library (weinholt compression adler-32)
   (export adler-32 adler-32-init adler-32-update
           adler-32-finish adler-32-width
           adler-32-self-test)

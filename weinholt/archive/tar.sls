@@ -53,7 +53,7 @@
       
 ;; http://www.gnu.org/software/tar/manual/html_section/Formats.html
 
-(library (weinholt archive tar (0 0 20120818))
+(library (weinholt archive tar)
   (export get-header-record
           header-name header-mode header-uid header-gid
           header-size header-mtime header-chksum

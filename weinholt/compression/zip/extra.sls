@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2009 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2009, 2012 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -30,7 +30,7 @@
 
 ;; This default library only does as much as is possible with R6RS.
 
-(library (weinholt compression zip extra (0 0 20120818))
+(library (weinholt compression zip extra)
   (export call-with-adorned-output-file get-file-attributes)
   (import (rnrs)
           (only (srfi :13 strings) string-suffix? string-trim)

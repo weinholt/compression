@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2009, 2010 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2009, 2010, 2012 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -23,7 +23,7 @@
 ;; Ikarus-dependent hooks for (weinholt compression zip). See
 ;; extra.sls for more information. Based on the hooks for Ypsilon.
 
-(library (weinholt compression zip extra (0 0 20120818))
+(library (weinholt compression zip extra)
   (export call-with-adorned-output-file get-file-attributes)
   (import (rnrs)
           (only (srfi :1 lists) drop-right)
