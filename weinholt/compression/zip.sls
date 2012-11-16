@@ -95,10 +95,10 @@
           (only (srfi :13 strings) string-prefix? string-suffix?
                 string-contains)
           (srfi :19 time)
-          (weinholt struct pack (1 (>= 3)))
-          (weinholt crypto crc (1 (>= 0)))
-          (weinholt compression inflate (1))
-          (weinholt compression zip extra (0 (>= 0))))
+          (weinholt struct pack)
+          (weinholt crypto crc)
+          (weinholt compression inflate)
+          (weinholt compression zip extra))
 
   (define-crc crc-32)
 

@@ -32,8 +32,8 @@
   (export inflate make-inflater)
   (import (rnrs)
           (only (srfi :1 lists) iota)
-          (weinholt compression bitstream (1))
-          (weinholt compression huffman (0 (>= 1)))
+          (weinholt compression bitstream)
+          (weinholt compression huffman)
           (weinholt compression sliding-buffer))
 
   (define-syntax trace

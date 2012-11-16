@@ -29,7 +29,7 @@
           is-xz-file?)
   (import (rnrs)
           (weinholt compression lzma2)
-          (weinholt crypto crc (1 (>= 2)))
+          (weinholt crypto crc)
           (weinholt crypto sha-2)       ;for streams
           (weinholt struct pack))
 

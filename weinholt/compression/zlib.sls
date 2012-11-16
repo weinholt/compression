@@ -33,9 +33,9 @@
   (export make-zlib-input-port)
   (import (rnrs)
           (weinholt bytevectors)
-          (weinholt compression adler-32 (0 (>= 0)))
-          (weinholt compression inflate (1))
-          (weinholt struct pack (1 (>= 3))))
+          (weinholt compression adler-32)
+          (weinholt compression inflate)
+          (weinholt struct pack))
 
   (define-syntax trace
     (syntax-rules ()

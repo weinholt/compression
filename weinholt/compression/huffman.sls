@@ -34,7 +34,7 @@
   (import (except (rnrs) fxreverse-bit-field)
           #;(only (srfi :13 strings) string-pad)
           #;(only (srfi :1 lists) iota)
-          (weinholt compression bitstream (1)))
+          (weinholt compression bitstream))
 
   (define-syntax trace
     (syntax-rules ()

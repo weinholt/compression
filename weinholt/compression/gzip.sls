@@ -39,9 +39,9 @@
   (import (rnrs)
           (srfi :19 time)
           (weinholt bytevectors)
-          (weinholt crypto crc (1))
-          (weinholt compression inflate (1))
-          (weinholt struct pack (1 (>= 3))))
+          (weinholt crypto crc)
+          (weinholt compression inflate)
+          (weinholt struct pack))
 
   (define-crc crc-32)
 
