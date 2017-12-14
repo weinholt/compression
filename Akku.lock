@@ -1,0 +1,12 @@
+#!r6rs ; -*- mode: scheme; coding: utf-8 -*-
+(import (akku format lockfile))
+(projects
+ ((name "chez-srfi")
+  (location (git "https://github.com/akeep/chez-srfi.git"))
+  (revision "42d6d4cf4f506ce41152f16e30e0d7e059faef95"))
+ ((name "struct-pack")
+  (location (git "https://github.com/weinholt/struct-pack.git"))
+  (tag "v1.0.0"))
+ ((name "industria")
+  (location (git "https://github.com/weinholt/industria.git"))
+  (revision "1a1b6d12e2265ed731407d97fc194bc4941315d0")))
