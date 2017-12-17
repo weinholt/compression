@@ -43,6 +43,10 @@ compiler:
   - gcc
 
 before_script:
+  # Install akku
+  - curl -L https://github.com/weinholt/akku/releases/download/v0.1.1/akku-0.1.1.pcsv9.5.ta6le.tar.gz | tar xvz
+  - (cd akku-*; ./install.sh; cd ..; ~/bin/akku install)
+  - export SCHEME_LIBRARY_PATH=$PWD/.akku/lib
   # Install scheme-ci
   - wget https://github.com/weinholt/scheme-ci/archive/master.zip -O scheme-ci-master.zip
   - unzip scheme-ci-master.zip
