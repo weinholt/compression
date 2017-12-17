@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2011, 2012 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2011, 2012, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -24,11 +24,11 @@
 
 ;; This hasn't been tested with LZMA1 streams.
 
-(library (weinholt compression lzma)
+(library (compression lzma)
   (export lzma-decode-chunk)
   (import (rnrs)
-          (weinholt bytevectors)
-          (weinholt compression sliding-buffer))
+          (compression sliding-buffer)
+          (compression private common))
 
   (define-syntax trace
     (syntax-rules ()

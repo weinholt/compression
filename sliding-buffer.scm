@@ -1,7 +1,8 @@
+;; -*- mode: scheme; coding: utf-8 -*-
 ;;; sliding-buffer.sls --- A circular buffer attached to a data sink
 
 ;; Copyright (C) 2009 Andreas Rottmann <a.rottmann@gmx.at>
-;; Copyright (C) 2010, 2011 Göran Weinholt <goran@weinholt.se>
+;; Copyright (C) 2010, 2011, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Author: Andreas Rottmann <a.rottmann@gmx.at>
 
@@ -38,7 +39,7 @@
 ;;; Code:
 #!r6rs
 
-(library (weinholt compression sliding-buffer)
+(library (compression sliding-buffer)
   (export make-sliding-buffer
           sliding-buffer?
           sliding-buffer-init!

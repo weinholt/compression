@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2011, 2012 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2011, 2012, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -24,14 +24,14 @@
 
 ;; http://tukaani.org/xz/format.html
 
-(library (weinholt compression xz)
+(library (compression xz)
   (export make-xz-input-port open-xz-file-input-port #;extract-xz
           is-xz-file?)
   (import (rnrs)
-          (weinholt compression lzma2)
-          (weinholt crypto crc)
-          (weinholt crypto sha-2)       ;for streams
-          (weinholt struct pack))
+          (compression lzma2)
+          (hashing crc)
+          (hashing sha-2)               ;for streams
+          (struct pack))
 
   (define-syntax trace
     (syntax-rules ()

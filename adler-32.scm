@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2010, 2012 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2010, 2012, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -20,8 +20,7 @@
 ;; DEALINGS IN THE SOFTWARE.
 #!r6rs
 
-;; Mark Adler's Adler-32 checksum (used by zlib). Provides the same
-;; procedures as (weinholt crypto crc), but Adler-32 is not a CRC.
+;; Mark Adler's Adler-32 checksum (used by zlib).
 
 ;; (adler-32 bytevector)
 ;;     returns the final Adler-32 checksum of the entire bytevector
@@ -38,7 +37,7 @@
 ;; (adler-32-self-test)
 ;;     returns 'sucess, 'failure, or 'no-self-test
 
-(library (weinholt compression adler-32)
+(library (compression adler-32)
   (export adler-32 adler-32-init adler-32-update
           adler-32-finish adler-32-width
           adler-32-self-test)

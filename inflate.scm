@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2009, 2010, 2012 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2009, 2010, 2012, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -28,13 +28,16 @@
 ;; the tree (they are sort of like Morse codes). LZ77 makes it
 ;; possible to copy parts of the recently decompressed data.
 
-(library (weinholt compression inflate)
-  (export inflate make-inflater)
-  (import (rnrs)
-          (only (srfi :1 lists) iota)
-          (weinholt compression bitstream)
-          (weinholt compression huffman)
-          (weinholt compression sliding-buffer))
+(library (compression inflate)
+  (export
+    inflate
+    make-inflater)
+  (import
+    (rnrs)
+    (compression bitstream)
+    (compression huffman)
+    (compression sliding-buffer)
+    (only (srfi :1 lists) iota))
 
   (define-syntax trace
     (syntax-rules ()
@@ -58,7 +61,7 @@
            ((fx<? i start)
             (canonical-codes->lookup-table
              (reconstruct-codes < l)))))))
-  
+
   (define static-table2
     (vector->huffman-lookup-table
      (list->vector

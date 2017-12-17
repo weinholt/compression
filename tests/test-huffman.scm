@@ -1,6 +1,6 @@
 #!/usr/bin/env scheme-script
 ;; -*- mode: scheme; coding: utf-8 -*- !#
-;; Copyright © 2009, 2010, 2011, 2012 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2009, 2010, 2011, 2012, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -21,10 +21,11 @@
 ;; DEALINGS IN THE SOFTWARE.
 #!r6rs
 
-(import (rnrs)
-        (srfi :78 lightweight-testing)
-        (weinholt compression bitstream)
-        (weinholt compression huffman))
+(import
+  (rnrs (6))
+  (srfi :78 lightweight-testing)
+  (compression bitstream)
+  (compression huffman))
 
 ;;                                                            ____ 12 in reverse
 (let ((br (make-bit-reader (open-bytevector-input-port #vu8(#b00111101 #b11000011 #b10100000))))
@@ -44,3 +45,4 @@
   #f)
 
 (check-report)
+(assert (check-passed? 5))

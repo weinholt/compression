@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2010, 2012 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2010, 2012, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -31,17 +31,17 @@
 
 ;; TODO: reduce maximum memory usage (see the note about call/cc)
 
-(library (weinholt compression gzip)
+(library (compression gzip)
   (export make-gzip-input-port open-gzip-file-input-port extract-gzip
           is-gzip-file? get-gzip-header
           gzip-text? gzip-mtime gzip-extra-data gzip-filename gzip-comment
           gzip-method gzip-os)
   (import (rnrs)
           (srfi :19 time)
-          (weinholt bytevectors)
-          (weinholt crypto crc)
-          (weinholt compression inflate)
-          (weinholt struct pack))
+          (compression inflate)
+          (compression private common)
+          (hashing crc)
+          (struct pack))
 
   (define-crc crc-32)
 

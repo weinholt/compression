@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2009, 2010, 2012 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2009, 2010, 2012, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@
 ;; Future work: zip64, split files, encryption, various compression
 ;; algorithms.
 
-(library (weinholt compression zip)
+(library (compression zip)
   (export supported-compression-method?
           compression-stored
           compression-shrunk
@@ -95,10 +95,10 @@
           (only (srfi :13 strings) string-prefix? string-suffix?
                 string-contains)
           (srfi :19 time)
-          (weinholt struct pack)
-          (weinholt crypto crc)
-          (weinholt compression inflate)
-          (weinholt compression zip extra))
+          (compression inflate)
+          (compression zip extra)
+          (hashing crc)
+          (struct pack))
 
   (define-crc crc-32)
 

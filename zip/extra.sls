@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2009, 2012 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2009, 2012, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -20,7 +20,7 @@
 ;; DEALINGS IN THE SOFTWARE.
 #!r6rs
 
-;; Template for implementation hooks for (weinholt compression zip).
+;; Template for implementation hooks for (weinholt compress zip).
 
 ;; The R6RS does not specify many file system operations and does not
 ;; specify how filenames are handled. It does not have operations for
@@ -30,7 +30,7 @@
 
 ;; This default library only does as much as is possible with R6RS.
 
-(library (weinholt compression zip extra)
+(library (compression zip extra)
   (export call-with-adorned-output-file get-file-attributes)
   (import (rnrs)
           (only (srfi :13 strings) string-suffix? string-trim)

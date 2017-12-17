@@ -1,6 +1,6 @@
 #!/usr/bin/env scheme-script
 ;; -*- mode: scheme; coding: utf-8 -*- !#
-;; Copyright © 2010 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2010, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -21,11 +21,12 @@
 ;; DEALINGS IN THE SOFTWARE.
 #!r6rs
 
-(import (rnrs)
-        (srfi :78 lightweight-testing)
-        (weinholt bytevectors)
-        (weinholt compression adler-32)
-        (weinholt compression gzip))
+(import
+  (rnrs (6))
+  (srfi :78 lightweight-testing)
+  (compression adler-32)
+  (compression gzip)
+  (compression private common))
 
 (define (gunzip bv)
   (call-with-port (make-gzip-input-port (open-bytevector-input-port bv)
@@ -101,3 +102,4 @@
        "ABCABC")
 
 (check-report)
+(assert (check-passed? 10))

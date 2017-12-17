@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2010, 2012 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2010, 2012, 2017 Göran Weinholt <goran@weinholt.se>
 ;;
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -50,23 +50,23 @@
 ;;  the symlink points.
 
 ;; ...
-      
+
 ;; http://www.gnu.org/software/tar/manual/html_section/Formats.html
 
-(library (weinholt archive tar)
-  (export get-header-record
-          header-name header-mode header-uid header-gid
-          header-size header-mtime header-chksum
-          header-typeflag header-linkname
-          header-magic header-version header-uname
-          header-gname header-devmajor header-devminor
-          
-          header-chksum-ok? header-chksum-calculate
-
-          extract-to-port skip-file)
-  (import (rnrs)
-          (only (srfi :13 strings) string-trim-both)
-          (only (srfi :19 time) time-monotonic->date make-time))
+(library (compression tar)
+  (export
+    get-header-record
+    header-name header-mode header-uid header-gid
+    header-size header-mtime header-chksum
+    header-typeflag header-linkname
+    header-magic header-version header-uname
+    header-gname header-devmajor header-devminor
+    header-chksum-ok? header-chksum-calculate
+    extract-to-port skip-file)
+  (import
+    (rnrs)
+    (only (srfi :13 strings) string-trim-both)
+    (only (srfi :19 time) time-monotonic->date make-time))
 
   (define-syntax trace
     (syntax-rules ()
@@ -146,14 +146,14 @@
               (sum rec 156 512))))
 
   (define (header-chksum-ok? rec)
-    (eqv? (header-chksum rec) 
+    (eqv? (header-chksum rec)
           (header-chksum-calculate rec)))
-  
+
 ;;; Tarball reading
 
   ;; TODO: GNU's LongLink (type L) and POSIX's PaxHeaders (type x).
   ;; Until then, you will not get long (>100 chars) filenames.
-  
+
   (define (get-header-record tarport)
     (define who 'get-header-record)
     (let ((rec (get-bytevector-n tarport 512)))

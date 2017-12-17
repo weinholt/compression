@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2009, 2012 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2009, 2012, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -20,10 +20,10 @@
 ;; DEALINGS IN THE SOFTWARE.
 #!r6rs
 
-;; Ypsilon-dependent hooks for (weinholt compression zip). See
-;; extra.sls for more information.
+;; Ypsilon-dependent hooks for (compression zip). See extra.sls for
+;; more information.
 
-(library (weinholt compression zip extra)
+(library (compression zip extra)
   (export call-with-adorned-output-file get-file-attributes)
   (import (rnrs)
           (only (srfi :1 lists) drop-right)
@@ -34,7 +34,7 @@
           (only (core) create-directory file-directory?
                 file-executable? change-file-mode
                 file-stat-mtime file-stat-atime file-stat-ctime)
-          (weinholt struct pack))
+          (struct pack))
 
   (define os-dos 0)
   (define os-unix 3)

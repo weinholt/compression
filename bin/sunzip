@@ -1,6 +1,6 @@
 #!/usr/bin/env scheme-script
 ;; -*- mode: scheme; coding: utf-8 -*- !#
-;; Copyright © 2009, 2010 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2009, 2010, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -21,11 +21,11 @@
 ;; DEALINGS IN THE SOFTWARE.
 #!r6rs
 
-(import (weinholt compression zip)
-        (only (srfi :1 lists) last)
-        (only (srfi :13 strings) string-filter string-pad string-pad-right)
-        (srfi :19 time)
-        (rnrs))
+(import
+  (rnrs (6))
+  (only (srfi :13 strings) string-pad)
+  (srfi :19 time)
+  (compression zip))
 
 (define (print . x) (for-each display x) (newline))
 
@@ -33,13 +33,12 @@
   (define (help . msg)
     (let ((x (current-error-port)))
       (when msg (display (car msg) x) (newline x) (newline x))
-      (display "unzip - .ZIP unpacker
+      (display "sunzip - .ZIP unpacker
 
-Usage: unzip [-l] [--] <filename.zip>
+Usage: sunzip [-l] [--] <filename.zip>
 
 Use the -l flag to list contents.
 
-Author: Göran Weinholt <goran@weinholt.se>.
 " x)
       (exit 1)))
   (let lp ((filename #f)
@@ -59,7 +58,6 @@ Author: Göran Weinholt <goran@weinholt.se>.
           (else
            (if filename (help "ERROR: extra arguments on command line"))
            (lp (car args) mode (cdr args))))))
-
 
 (define (extract-files filename)
   (print "Extracting files from " filename " ...\n")
@@ -97,11 +95,6 @@ Author: Göran Weinholt <goran@weinholt.se>.
             '(Lu Ll Lt Lm Lo Mn Nl No Pd Pc Po Sc Sm Sk So Co
                  Nd Mc Me))))
 
-(define (pad s len c)
-  (if (< (string-length s) len)
-      (string-append s (make-string (- len (string-length s)) c))
-      s))
-
 (define (list-files filename)
   (print "Listing files in " filename " (from the central directory) ...\n")
   (print "CRC-32    Last modified            Size           Name\n")
@@ -115,11 +108,12 @@ Author: Göran Weinholt <goran@weinholt.se>.
                    (string-pad (number->string (central-directory-crc-32 rec) 16)
                                9 #\0)
                    (if date (date->string date " ~1 ~2 ") " ????-??-?? ??:??:??+???? ")
-                   
-                   (pad (string-append (number->string (central-directory-uncompressed-size rec))
-                                       "/"
-                                       (number->string (central-directory-compressed-size rec)))
-                        13 #\space)
+
+                   (string-pad
+                    (string-append (number->string (central-directory-uncompressed-size rec))
+                                   "/"
+                                   (number->string (central-directory-compressed-size rec)))
+                    13 #\space)
                    "  " (string-filter char-printable? (central-directory-filename rec))))
 
                 (unless (supported-compression-method?
@@ -135,7 +129,6 @@ Author: Göran Weinholt <goran@weinholt.se>.
                                           (string-pad
                                            (number->string b 16)
                                            2 #\0)))
-                                   
                                        (bytevector->u8-list (cdr e)))))
                  (central-directory-extra rec))
                 (let ((comment (central-directory-comment rec)))
@@ -149,8 +142,5 @@ Author: Göran Weinholt <goran@weinholt.se>.
       (unless (equal? "" comment)
         (print "\n.ZIP file comment:\n"
                (string-filter char-printable? comment))))))
-
-
-
 
 (parse-args (cdr (command-line)))

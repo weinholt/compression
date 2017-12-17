@@ -1,6 +1,6 @@
 #!/usr/bin/env scheme-script
 ;; -*- mode: scheme; coding: utf-8 -*- !#
-;; Copyright © 2009, 2010 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2009, 2010, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -21,8 +21,9 @@
 ;; DEALINGS IN THE SOFTWARE.
 #!r6rs
 
-(import (weinholt compression zip)
-        (rnrs))
+(import
+  (rnrs (6))
+  (compression zip))
 
 (define (print . x) (for-each display x) (newline))
 
@@ -30,13 +31,14 @@
   (define (help . msg)
     (let ((x (current-error-port)))
       (when msg (display (car msg) x) (newline x) (newline x))
-      (display "zip - .ZIP archiver
+      (display "szip - .ZIP archiver
 
-Usage: zip <filename.zip> <files> ...
+Usage: szip <filename.zip> <files> ...
 
 This program creates a .ZIP file and adds the given files to it.
 
-Author: Göran Weinholt <goran@weinholt.se>.
+Note: currently the files are not actually compressed.
+
 " x)
       (exit 1)))
   (let lp ((filename #f)

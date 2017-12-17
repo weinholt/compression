@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2011, 2012 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2011, 2012, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -29,12 +29,12 @@ A chunk can be at most this large when uncompressed:
        1)) => 2097152
 |#
 
-(library (weinholt compression lzma2)
+(library (compression lzma2)
   (export lzma2-decode-chunk)
   (import (rnrs)
-          (weinholt compression lzma)
-          (weinholt compression sliding-buffer)
-          (weinholt struct pack))
+          (compression lzma)
+          (compression sliding-buffer)
+          (struct pack))
 
   (define-syntax trace
     (syntax-rules ()

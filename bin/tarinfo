@@ -1,7 +1,7 @@
 #!/usr/bin/env scheme-script
 ;; -*- mode: scheme; coding: utf-8 -*- !#
 ;; tarinfo - Print information about tarballs
-;; Copyright © 2010, 2011 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2010, 2011, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -24,11 +24,12 @@
 
 ;; Prints assorted facts about tarballs.
 
-(import (rnrs)
-        (srfi :19 time)
-        (weinholt archive tar)
-        (weinholt compression gzip)
-        (weinholt compression xz))
+(import
+  (rnrs (6))
+  (srfi :19 time)
+  (compression tar)
+  (compression gzip)
+  (compression xz))
 
 (define (print . x) (for-each display x) (newline))
 

@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2010, 2012 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2010, 2012, 2017 Göran Weinholt <goran@weinholt.se>
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -29,13 +29,13 @@
 ;; sender does not flush properly, you might be stuck waiting for more
 ;; data, even though there is data in the buffers.
 
-(library (weinholt compression zlib)
+(library (compression zlib)
   (export make-zlib-input-port)
   (import (rnrs)
-          (weinholt bytevectors)
-          (weinholt compression adler-32)
-          (weinholt compression inflate)
-          (weinholt struct pack))
+          (compression adler-32)
+          (compression inflate)
+          (compression private common)
+          (struct pack))
 
   (define-syntax trace
     (syntax-rules ()
