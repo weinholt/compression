@@ -30,6 +30,7 @@
           (only (srfi :1 lists) drop-right)
           (only (srfi :13 strings) string-suffix? string-trim
                 string-prefix? string-contains string-tokenize)
+          (only (srfi :14 char-sets) char-set char-set-complement)
           (only (weinholt text strings) string-split)
           (srfi :19 time)
           (only (ikarus) make-directory file-directory?
@@ -75,7 +76,9 @@
           (else
            ;; Create the file's directory
            (when (string-contains inzip-filename "/")
-             (let ((parts (drop-right (string-split inzip-filename #\/) 1)))
+             (let ((parts (drop-right (string-tokenize inzip-filename
+                                                       (char-set-complement (char-set #\/)))
+                                      1)))
                (let lp ((parts (cdr parts))
                         (dir (car parts)))
                  (unless (file-exists? dir)

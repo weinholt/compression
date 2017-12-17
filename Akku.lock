@@ -9,7 +9,4 @@
   (revision "eec155b069d03c12be62444754514a8fff34d4ea"))
  ((name "hashing")
   (location (git "https://github.com/weinholt/hashing.git"))
-  (revision "de6aa096166bb026eb927b56f763707180ec0330"))
- ((name "industria")
-  (location (git "https://github.com/weinholt/industria.git"))
-  (revision "1a1b6d12e2265ed731407d97fc194bc4941315d0")))
+  (revision "de6aa096166bb026eb927b56f763707180ec0330")))

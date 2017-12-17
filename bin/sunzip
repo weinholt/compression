@@ -24,7 +24,8 @@
 
 (import
   (rnrs (6))
-  (only (srfi :13 strings) string-pad)
+  (only (srfi :1 lists) last)
+  (only (srfi :13 strings) string-pad string-filter)
   (srfi :19 time)
   (compression zip))
 

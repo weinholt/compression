@@ -75,7 +75,9 @@
           (else
            ;; Create the file's directory
            (when (string-contains inzip-filename "/")
-             (let ((parts (drop-right (string-split inzip-filename #\/) 1)))
+             (let ((parts (drop-right (string-tokenize inzip-filename
+                                                       (char-set-complement (char-set #\/)))
+                                      1)))
                (let lp ((parts (cdr parts))
                         (dir (car parts)))
                  (unless (file-exists? dir)
