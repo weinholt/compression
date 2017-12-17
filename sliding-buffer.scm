@@ -3,6 +3,7 @@
 
 ;; Copyright (C) 2009 Andreas Rottmann <a.rottmann@gmx.at>
 ;; Copyright (C) 2010, 2011, 2017 Göran Weinholt <goran@weinholt.se>
+;; SPDX-License-Identifier: MIT
 
 ;; Author: Andreas Rottmann <a.rottmann@gmx.at>
 

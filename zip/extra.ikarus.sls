@@ -1,5 +1,6 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
 ;; Copyright © 2009, 2010, 2012, 2017 Göran Weinholt <goran@weinholt.se>
+;; SPDX-License-Identifier: MIT
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
 ;; copy of this software and associated documentation files (the "Software"),
@@ -44,7 +45,7 @@
   ;; and \?
 
   ;; TODO: change file times. I didn't see a procedure for that.
-  
+
   (define (call-with-adorned-output-file inzip-filename date local-extra
                                          central-extra
                                          os-made-by
@@ -114,7 +115,7 @@
                          (not (string-suffix? "/" fn)))
                     (string-append fn "/")
                     fn)))
-        
+
         (values
           ;; Remove leading /
           (string-trim fn #\/)          ;filename in .zip file
