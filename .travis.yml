@@ -8,31 +8,29 @@ env:
     - SCHEME="Racket_HEAD"
     - SCHEME="SagittariusScheme"
     - SCHEME="VicareScheme"
+    - SCHEME="Ypsilon"
 
 matrix:
   allow_failures:
+    - env: SCHEME="Ypsilon"
     # The srfi project lacks compat libs for these.
     - env: SCHEME="Guile_2.0"
     - env: SCHEME="Guile_2.2"
     - env: SCHEME="SagittariusScheme"
   fast_finish: true
 
+sudo: false
+dist: trusty
+
 addons:
   apt:
     packages:
-      # For Vicare and GNU Guile
-      - libgmp-dev
-      # Sagittarius
-      - libgc-dev
-      - zlib1g-dev
-      - libffi-dev
       # For Larceny
       - libc6:i386
+      # Sagittarius and GNU Guile
+      - libgc-dev
       # GNU Guile
       - libunistring-dev
-      - gcc-4.8
-    sources:
-      - ubuntu-toolchain-r-test
 
 language: c
 
@@ -48,9 +46,11 @@ compiler:
   - gcc
 
 before_script:
-  # Install akku
-  - curl -L https://github.com/weinholt/akku/releases/download/v0.1.1/akku-0.1.1.pcsv9.5.ta6le.tar.gz | tar xvz
-  - (cd akku-*; ./install.sh; cd ..; ~/bin/akku install)
+  # Install Akku.scm and dependencies
+  - gpg --keyserver pool.sks-keyservers.net --recv-keys 08272FBB54EEB5072D5BA930E33E61A2E9B8C3A2
+  - curl -A "$TRAVIS_REPO_SLUG" -LO "https://akku.weinholt.se/get-akku.sh{,.sig}"
+  - gpg --verify get-akku.sh.sig get-akku.sh && bash get-akku.sh
+  - ~/bin/akku install
   - export SCHEME_LIBRARY_PATH=$PWD/.akku/lib
   # Install scheme-ci
   - wget https://github.com/weinholt/scheme-ci/archive/master.zip -O scheme-ci-master.zip
