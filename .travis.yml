@@ -17,7 +17,6 @@ matrix:
     - env: SCHEME="Guile_2.0"
     - env: SCHEME="Guile_2.2"
     - env: SCHEME="SagittariusScheme"
-  fast_finish: true
 
 sudo: false
 dist: trusty
