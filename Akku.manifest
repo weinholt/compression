@@ -1,7 +1,7 @@
 #!r6rs ; -*- mode: scheme; coding: utf-8 -*-
 (import (akku format manifest))
 
-(akku-package ("compression" "0.1.0")
+(akku-package ("compression" "0.1.1")
   (synopsis "Decompresses zlib, xz, gzip, lzma, lzma2; extracts tar, zip")
   (authors "Göran Weinholt <goran@weinholt.se>")
   (license "MIT")
@@ -9,4 +9,5 @@
   (depends ("chez-srfi" "^0.0.0-akku.53.73bbf95")
            ("hashing" "^1.2.0")
            ("struct-pack" "^1.0.0"))
+  (depends/dev)
 )

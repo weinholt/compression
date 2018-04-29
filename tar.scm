@@ -1,5 +1,5 @@
 ;; -*- mode: scheme; coding: utf-8 -*-
-;; Copyright © 2010, 2012, 2017 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2010, 2012, 2017, 2018 Göran Weinholt <goran@weinholt.se>
 ;; SPDX-License-Identifier: MIT
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
@@ -66,7 +66,7 @@
     extract-to-port skip-file)
   (import
     (rnrs)
-    (only (srfi :13 strings) string-trim-both)
+    (only (srfi :13 strings) string-trim-both string-trim-right)
     (only (srfi :19 time) time-monotonic->date make-time))
 
   (define-syntax trace
@@ -87,7 +87,7 @@
              (let ((b (bytevector-u8-ref bv i)))
                (unless (fxzero? b)
                  (put-u8 r b)
-                 (lp (+ i 1) (- max 1))))))))))
+                 (lp (fx+ i 1) (fx- max 1))))))))))
 
   (define (get-octal bv i max)
     (string->number (string-trim-both (get-asciiz bv i max)) 8))
@@ -96,28 +96,39 @@
     (make-bytevector 512 0))
 
   (define (zero-record? rec)
-    (bytevector=? rec zero-record))
+    (bytevector=? (rec-bv rec) zero-record))
 
   (define (premature-eof who tarport)
     (error who "premature end of archive" tarport))
 
+  (define (rec-ref name rec)
+    (cond ((bytevector? rec) #f)
+          ((assq name rec) => cdr)
+          (else #f)))
+
+  (define (rec-bv rec)
+    (if (bytevector? rec) rec (cdr (assq 'bv rec))))
+
 ;;; Header accessors
-  ;; Please use these header accessors and do not rely on the header
-  ;; record being a bytevector.
 
-  (define (header-name rec) (get-asciiz rec 0 100))
+  ;; Please use these header accessors and do not rely on type of the
+  ;; object returned by get-header-record.
 
-  (define (header-mode rec) (get-octal rec 100 8))
-  (define (header-uid rec) (get-octal rec 108 8))
-  (define (header-gid rec) (get-octal rec 116 8))
-  (define (header-size rec) (get-octal rec 124 12))
-  (define (header-mtime rec) (time-monotonic->date
-                              (make-time 'time-monotonic 0
-                                         (get-octal rec 136 12))))
-  (define (header-chksum rec) (get-octal rec 148 8))
+  (define (header-name rec)
+    (or (rec-ref 'path rec)
+        (get-asciiz (rec-bv rec) 0 100)))
+
+  (define (header-mode rec) (get-octal (rec-bv rec) 100 8))
+  (define (header-uid rec) (get-octal (rec-bv rec) 108 8))
+  (define (header-gid rec) (get-octal (rec-bv rec) 116 8))
+  (define (header-size rec) (get-octal (rec-bv rec) 124 12))
+  (define (header-mtime rec)
+    (time-monotonic->date
+     (make-time 'time-monotonic 0
+                (get-octal (rec-bv rec) 136 12))))
+  (define (header-chksum rec) (get-octal (rec-bv rec) 148 8))
   (define (header-typeflag rec)
-    (let ((t (integer->char
-              (bytevector-u8-ref rec 156))))
+    (let ((t (integer->char (bytevector-u8-ref (rec-bv rec) 156))))
       (case t
         ((#\0 #\nul) 'regular)
         ((#\1) 'hardlink)
@@ -129,43 +140,104 @@
         ;; Regular file with "high-performance attribute"?
         ((#\7) 'regular)
         (else t))))
-  (define (header-linkname rec) (get-asciiz rec 157 100))
-  (define (header-magic rec) (get-asciiz rec 257 6))
-  (define (header-version rec) (get-octal rec 263 2))
-  (define (header-uname rec) (get-asciiz rec 265 32))
-  (define (header-gname rec) (get-asciiz rec 297 32))
-  (define (header-devmajor rec) (get-octal rec 329 8))
-  (define (header-devminor rec) (get-octal rec 337 8))
+  (define (header-linkname rec)
+    (or (rec-ref 'linkpath rec)
+        (get-asciiz (rec-bv rec) 157 100)))
+  (define (header-magic rec) (get-asciiz (rec-bv rec) 257 6))
+  (define (header-version rec) (get-octal (rec-bv rec) 263 2))
+  (define (header-uname rec) (get-asciiz (rec-bv rec) 265 32))
+  (define (header-gname rec) (get-asciiz (rec-bv rec) 297 32))
+  (define (header-devmajor rec) (get-octal (rec-bv rec) 329 8))
+  (define (header-devminor rec) (get-octal (rec-bv rec) 337 8))
 
   (define (header-chksum-calculate rec)
     (define (sum bv start end)
       (do ((i start (fx+ i 1))
            (sum 0 (fx+ sum (bytevector-u8-ref bv i))))
           ((fx=? i end) sum)))
-    (fx+ (sum rec 0 148)
+    (fx+ (sum (rec-bv rec) 0 148)
          (fx+ 256 #;(sum #vu8(32 32 32 32 32 32 32 32) 0 8)
-              (sum rec 156 512))))
+              (sum (rec-bv rec) 156 512))))
 
   (define (header-chksum-ok? rec)
-    (eqv? (header-chksum rec)
-          (header-chksum-calculate rec)))
+    (eqv? (header-chksum (rec-bv rec))
+          (header-chksum-calculate (rec-bv rec))))
 
 ;;; Tarball reading
 
-  ;; TODO: GNU's LongLink (type L) and POSIX's PaxHeaders (type x).
-  ;; Until then, you will not get long (>100 chars) filenames.
+  ;; TODO: PAX global header (g)?
+
+  (define (extract-to-bytevector tarport header)
+    (call-with-bytevector-output-port
+      (lambda (p)
+        (extract-to-port tarport header p))))
+
+  (define (parse-pax-header header value->string)
+    (define (get/sentinel port sentinel valid?)
+      (let lp ((chars '()))
+        (let ((b (get-u8 port)))
+          (cond ((eof-object? b) (eof-object))
+                ((fx=? b (char->integer sentinel))
+                 (list->string (reverse chars)))
+                ((valid? b)
+                 (lp (cons (integer->char b) chars)))
+                (else (eof-object))))))
+    (call-with-port (open-bytevector-input-port (rec-bv header))
+      (lambda (p)
+        (let lp ((attr* '()))
+          (let* ((len (get/sentinel p #\space
+                                    (lambda (b)
+                                      (fx<=? (char->integer #\0) b (char->integer #\9)))))
+                 (key (get/sentinel p #\= (lambda _ _))))
+            (if (eof-object? len)
+                attr*
+                (let* ((value-len (- (string->number len 10) 1 ;<length> <space>
+                                     (string-length len) 1 ;<key> <equals>
+                                     (string-length key) 1)) ;<value> <newline>
+                       (value (get-bytevector-n p value-len))
+                       (newline (get-u8 p)))
+                  (unless (and (bytevector? value)
+                               (= (bytevector-length value) value-len)
+                               (eqv? newline (char->integer #\newline)))
+                    (error 'parse-pax-header "Invalid PAX header"
+                           value value-len newline))
+                  (cons (cons (string->symbol key) (value->string value))
+                        (lp attr*)))))))))
 
   (define (get-header-record tarport)
     (define who 'get-header-record)
     (let ((rec (get-bytevector-n tarport 512)))
-      (trace "get-header-record: `" (utf8->string rec) "'")
-      (cond ((eof-object? rec) (eof-object))
-            ((zero-record? rec) (eof-object))
-            ((not (= (bytevector-length rec) 512))
-             (premature-eof who tarport))
-            ((not (header-chksum-ok? rec))
-             (error who "bad tar header checksum" tarport))
-            (else rec))))
+      (trace "get-header-record")
+      (cond
+        ((eof-object? rec) (eof-object))
+        ((zero-record? rec) (eof-object))
+        ((not (= (bytevector-length rec) 512))
+         (premature-eof who tarport))
+        ((not (header-chksum-ok? rec))
+         (error who "bad tar header checksum" tarport))
+        ((and (eqv? (header-typeflag rec) #\L)
+              (equal? (header-name rec) "././@LongLink"))
+         (trace "reading gnu L")
+         (let* ((data (extract-to-bytevector tarport rec))
+                (path (string-trim-right (utf8->string data) #\nul)))
+           `((path . ,path)
+             ,@(get-header-record tarport))))
+        ((and (eqv? (header-typeflag rec) #\K)
+              (equal? (header-name rec) "././@LongLink"))
+         (trace "reading gnu K")
+         (let* ((data (extract-to-bytevector tarport rec))
+                (linkpath (string-trim-right (utf8->string data) #\nul)))
+           `((linkpath . ,linkpath)
+             ,@(get-header-record tarport))))
+        ((eqv? (header-typeflag rec) #\x)
+         (trace "reading pax header")
+         (let ((pax-data (extract-to-bytevector tarport rec)))
+           ;; (hexdump #f pax-data)
+           ;; TODO: the global header might specify something other than utf8
+           (append (parse-pax-header pax-data utf8->string)
+                   (get-header-record tarport))))
+        (else
+         `((bv . ,rec))))))
 
   (define (extract-to-port tarport header destport)
     (define who 'extract-to-port)
@@ -173,7 +245,6 @@
            " (" (header-size header) ") bytes"
            " from " tarport " to " destport)
     (let*-values (((size) (header-size header))
-                  ((padded) (bitwise-and -512 (+ 511 size)))
                   ((blocks trail) (div-and-mod size 512)))
       (trace blocks " blocks and " trail " bytes trailing")
       (do ((buf (make-bytevector 512))

@@ -1,7 +1,7 @@
 #!/usr/bin/env scheme-script
 ;; -*- mode: scheme; coding: utf-8 -*- !#
 ;; tarinfo - Print information about tarballs
-;; Copyright © 2010, 2011, 2017 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2010, 2011, 2017, 2018 Göran Weinholt <goran@weinholt.se>
 ;; SPDX-License-Identifier: MIT
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
@@ -107,7 +107,7 @@
             (case t
               ((regular) 'thats-fine...)
               ((directory) (print "\tDirectory"))
-              ((symlink) (print "\tSymlink to " (header-linkname rec)))
+              ((symlink) (print "\tSymlink to `" (header-linkname rec) "`"))
               (else (print "\tType: " t))))
 
           (skip-file p rec)

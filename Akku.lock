@@ -3,7 +3,7 @@
 (import (akku format lockfile))
 (projects
   ((name "chez-srfi")
-    (location (git "https://github.com/arcfide/chez-srfi.git"))
+    (location (git "https://github.com/arcfide/chez-srfi"))
     (revision "73bbf95564184140242fa3d806bdb5995af42ae3"))
   ((name "hashing")
     (location (git "https://github.com/weinholt/hashing.git"))
@@ -12,5 +12,5 @@
   ((name "struct-pack")
     (location
       (git "https://github.com/weinholt/struct-pack.git"))
-    (tag "v1.0.0")
-    (revision "eec155b069d03c12be62444754514a8fff34d4ea")))
+    (tag "v1.1.0")
+    (revision "6c583e744154e31b529445824f858f734e6ad66e")))
