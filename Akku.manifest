@@ -6,7 +6,7 @@
   (authors "Göran Weinholt <goran@weinholt.se>")
   (license "MIT")
   (location (git "https://github.com/weinholt/compression"))
-  (depends ("chez-srfi" "^0.0.0-akku.53.73bbf95")
+  (depends ("chez-srfi" "~0.0.0-akku")
            ("hashing" "^1.2.0")
            ("struct-pack" "^1.0.0"))
   (depends/dev)
