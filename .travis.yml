@@ -46,8 +46,8 @@ compiler:
 
 before_script:
   # Install Akku.scm and dependencies
-  - gpg --keyserver pool.sks-keyservers.net --recv-keys 08272FBB54EEB5072D5BA930E33E61A2E9B8C3A2
-  - curl -A "$TRAVIS_REPO_SLUG" -LO "https://akku.weinholt.se/get-akku.sh{,.sig}"
+  - gpg --keyserver ha.pool.sks-keyservers.net --recv-keys 08272FBB54EEB5072D5BA930E33E61A2E9B8C3A2
+  - curl -A "$TRAVIS_REPO_SLUG" -LO "https://archive.akkuscm.org/get-akku.sh{,.sig}"
   - gpg --verify get-akku.sh.sig get-akku.sh && bash get-akku.sh
   - ~/bin/akku install
   - export SCHEME_LIBRARY_PATH=$PWD/.akku/lib
