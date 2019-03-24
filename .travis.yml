@@ -1,7 +1,6 @@
 env:
   matrix:
     - SCHEME="ChezScheme_master"
-    - SCHEME="Guile_2.0"
     - SCHEME="Guile_2.2"
     - SCHEME="Larceny"
     - SCHEME="Racket_6.2"
@@ -12,10 +11,8 @@ env:
 
 matrix:
   allow_failures:
+    # The chez-srfi project lacks compat libs for these.
     - env: SCHEME="Ypsilon"
-    # The srfi project lacks compat libs for these.
-    - env: SCHEME="Guile_2.0"
-    - env: SCHEME="Guile_2.2"
     - env: SCHEME="SagittariusScheme"
 
 sudo: false
