@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -ex
 
 tests/test-gzip.scm
