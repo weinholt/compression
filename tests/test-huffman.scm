@@ -1,6 +1,6 @@
 #!/usr/bin/env scheme-script
 ;; -*- mode: scheme; coding: utf-8 -*- !#
-;; Copyright © 2009, 2010, 2011, 2012, 2017 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2009, 2010, 2011, 2012, 2017, 2019 Göran Weinholt <goran@weinholt.se>
 ;; SPDX-License-Identifier: MIT
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
@@ -24,10 +24,11 @@
 
 (import
   (rnrs (6))
-  (srfi :78 lightweight-testing)
+  (srfi :64 testing)
   (compression bitstream)
   (compression huffman))
 
+(test-begin "huffman")
 ;;                                                            ____ 12 in reverse
 (let ((br (make-bit-reader (open-bytevector-input-port #vu8(#b00111101 #b11000011 #b10100000))))
       ;;                                                          ^^^^ this is 11, in reverse
@@ -38,12 +39,12 @@
   ;; Check that the following are properly decoded. The library has to
   ;; get from the bits in the bytevector to these symbols, via the
   ;; lookup table.
-  (check (get-next-code br table) => 6) ;corresponds to 11
-  (check (get-next-code br table) => 7) ;   --""--      12
-  (check (get-next-code br table) => 7)
-  (check (get-next-code br table) => 8)
-  (check (get-next-code br table) => 7)
+  (test-equal 6 (get-next-code br table)) ;corresponds to 11
+  (test-equal 7 (get-next-code br table)) ;   --""--      12
+  (test-equal 7 (get-next-code br table))
+  (test-equal 8 (get-next-code br table))
+  (test-equal 7 (get-next-code br table))
   #f)
+(test-end)
 
-(check-report)
-(assert (check-passed? 5))
+(exit (if (zero? (test-runner-fail-count (test-runner-get))) 0 1))

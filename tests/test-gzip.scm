@@ -1,6 +1,6 @@
 #!/usr/bin/env scheme-script
 ;; -*- mode: scheme; coding: utf-8 -*- !#
-;; Copyright © 2010, 2017 Göran Weinholt <goran@weinholt.se>
+;; Copyright © 2010, 2017, 2019 Göran Weinholt <goran@weinholt.se>
 ;; SPDX-License-Identifier: MIT
 
 ;; Permission is hereby granted, free of charge, to any person obtaining a
@@ -24,7 +24,7 @@
 
 (import
   (rnrs (6))
-  (srfi :78 lightweight-testing)
+  (srfi :64 testing)
   (compression adler-32)
   (compression gzip)
   (compression private common))
@@ -38,6 +38,7 @@
   (let-values (((p extract) (open-bytevector-output-port)))
     (let-values ((x (extract-gzip (open-bytevector-input-port bv)
                                   p)))
+      (display "gunzip*: ")
       (display x)
       (newline))
     (extract)))
@@ -50,57 +51,50 @@
           237 39 18 43 187 20 28 243 46 174 216 92 89 7 127 248
           111 41 243 65 0 0 0))
 
-(check (utf8->string (gunzip test.gz))
-       =>
-       "You should have received a copy of the GNU General Public License")
+(test-begin "gzip")
 
-(check (utf8->string (gunzip* test.gz))
-       =>
-       "You should have received a copy of the GNU General Public License")
+(test-equal "You should have received a copy of the GNU General Public License"
+            (utf8->string (gunzip test.gz)))
+
+(test-equal "You should have received a copy of the GNU General Public License"
+            (utf8->string (gunzip* test.gz)))
 
 (define dev/null
   #vu8(31 139 8 0 15 108 201 75 2 3 3 0 0 0 0 0 0 0 0 0))
 
-(check (gunzip dev/null)
-       =>
-       (eof-object))
+(test-equal (eof-object)
+            (gunzip dev/null))
 
-(check (gunzip* dev/null)
-       =>
-       #vu8())
+(test-equal #vu8()
+            (gunzip* dev/null))
 
 ;; test concatenating gzip members
 
 (define ABC
   #vu8(31 139 8 0 252 162 173 76 2 3 115 116 114 6 0 72 3 131 163 3 0 0 0))
 
-(check (utf8->string (gunzip (bytevector-append ABC ABC)))
-       =>
-       "ABCABC")
+(test-equal "ABCABC"
+            (utf8->string (gunzip (bytevector-append ABC ABC))))
 
-(check (utf8->string (gunzip (bytevector-append ABC ABC ABC)))
-       =>
-       "ABCABCABC")
+(test-equal "ABCABCABC"
+            (utf8->string (gunzip (bytevector-append ABC ABC ABC))))
 
-(check (utf8->string (gunzip (bytevector-append ABC ABC
-                                                (string->utf8 "garbage"))))
-       =>
-       "ABCABC")
+(test-equal "ABCABC"
+            (utf8->string (gunzip (bytevector-append ABC ABC
+                                                     (string->utf8 "garbage")))))
 
 ;; tests concatenation with extract-gzip instead of the custom port
 
-(check (utf8->string (gunzip* (bytevector-append ABC ABC)))
-       =>
-       "ABCABC")
+(test-equal "ABCABC"
+            (utf8->string (gunzip* (bytevector-append ABC ABC))))
 
-(check (utf8->string (gunzip* (bytevector-append ABC ABC ABC)))
-       =>
-       "ABCABCABC")
+(test-equal "ABCABCABC"
+            (utf8->string (gunzip* (bytevector-append ABC ABC ABC))))
 
-(check (utf8->string (gunzip* (bytevector-append ABC ABC
-                                                 (string->utf8 "garbage"))))
-       =>
-       "ABCABC")
+(test-equal "ABCABC"
+            (utf8->string (gunzip* (bytevector-append ABC ABC
+                                                      (string->utf8 "garbage")))))
 
-(check-report)
-(assert (check-passed? 10))
+(test-end)
+
+(exit (if (zero? (test-runner-fail-count (test-runner-get))) 0 1))
