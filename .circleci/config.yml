@@ -10,6 +10,7 @@ jobs:
   "test-guile": {docker: [{image: "akkuscm/akku:guile"}], steps: *test_steps}
   "test-ikarus": {docker: [{image: "akkuscm/akku:ikarus"}], steps: *test_steps}
   "test-ironscheme": {docker: [{image: "akkuscm/akku:ironscheme"}], steps: *test_steps}
+  "test-ironscheme-dotnet": {docker: [{image: "akkuscm/akku:ironscheme-dotnet"}], steps: *test_steps}
   "test-larceny": {docker: [{image: "akkuscm/akku:larceny"}], steps: *test_steps}
   "test-loko": {docker: [{image: "akkuscm/akku:loko"}], steps: *test_steps}
   "test-mosh": {docker: [{image: "akkuscm/akku:vicare"}], steps: *test_steps}
@@ -25,6 +26,7 @@ workflows:
       - "test-guile"
       - "test-ikarus"
       - "test-ironscheme"
+      - "test-ironscheme-dotnet"
       - "test-larceny"
       - "test-loko"
       - "test-mosh"
